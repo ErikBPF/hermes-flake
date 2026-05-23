@@ -104,6 +104,17 @@
 
         nixosModules.hermes-agent = self.nixosModules.default;
 
+        nixosModules.hermes-agent-container = {
+          config,
+          lib,
+          pkgs,
+          ...
+        }:
+          import ./container.nix {
+            inherit config lib pkgs;
+            flakeSelf = self;
+          };
+
         homeManagerModules.default = import ./modules/home-manager.nix {
           inherit (self) packages;
         };

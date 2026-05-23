@@ -188,8 +188,33 @@ Bump procedure: edit `hermes-agent-src.url` in `flake.nix`, run `nix flake updat
 
 MIT.
 
+## Isolation options
+
+- **Bare-metal NixOS module** — `nixosModules.default` (recommended for trusted hosts)
+- **nixos-container wrapper** — `nixosModules.hermes-agent-container` (Docker-like systemd-nspawn isolation, fully declarative)
+- **podman/microvm.nix** — sketched in [docs/ISOLATION.md](docs/ISOLATION.md)
+
+Container quickstart:
+
+    services.hermes-agent-container = {
+      enable = true;
+      containerName = "hermes";
+      privateNetwork = false;  # share host net; flip to true for stronger isolation
+      hostSecretsPath = config.sops.secrets."hermes-agent/env".path;
+      telegramAllowedUsers = [ 7729797827 ];
+    };
+
+Full example at [example/discovery-container.nix](example/discovery-container.nix).
+
+## Client setup (laptop / per-user)
+
+See [docs/CLIENT.md](docs/CLIENT.md). Summary: each hermes install has its own brain. Recommended pattern is local CLI on laptop (separate brain, shared LiteLLM backend) + Telegram/Discord for homelab ops directed at Discovery.
+
 ## See also
 
 - [docs/SOPS.md](docs/SOPS.md) — sops-nix integration recipe
+- [docs/ISOLATION.md](docs/ISOLATION.md) — bare-metal vs container vs VM trade-offs
+- [docs/CLIENT.md](docs/CLIENT.md) — laptop client patterns (A/B/C/D)
 - [docs/UPSTREAM_PR.md](docs/UPSTREAM_PR.md) — plan for contributing back to NousResearch
-- [example/configuration.nix](example/configuration.nix) — drop-in NixOS host config
+- [example/configuration.nix](example/configuration.nix) — bare-metal NixOS host config
+- [example/discovery-container.nix](example/discovery-container.nix) — nixos-container variant
