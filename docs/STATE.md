@@ -57,58 +57,29 @@ tar czf hermes-backup-$(date +%Y%m%d).tar.gz \
 sudo btrfs subvolume snapshot -r /var/lib/hermes-agent /var/lib/snapshots/hermes-$(date +%Y%m%d-%H%M)
 ```
 
-Send/receive to offsite (Voyager) over Tailscale:
+Send/receive to an offsite host (e.g. over Tailscale):
 
 ```fish
 sudo btrfs send /var/lib/snapshots/hermes-20260523-1400 | \
   ssh voyager 'sudo btrfs receive /backup/hermes/'
 ```
 
-## Migration: Docker → NixOS (Discovery)
+## Migration: Docker → NixOS
 
-Existing Docker container's data dir = `/home/erik/homelab/apps/hermes-agent` (host bind-mount). UID inside container = 10000.
+See [`docs/MIGRATION.md`](MIGRATION.md) for the step-by-step Docker → NixOS procedure. All state (sessions, skills, wiki, kanban, memories) is preserved by moving the host-side data dir.
 
-```fish
-# stop container
-ssh discovery 'sudo systemctl stop podman-compose-hermes-agent.service || docker stop hermes-agent'
+## Per-user dataDir (home-manager)
 
-# move + chown
-ssh discovery 'sudo mv /home/erik/homelab/apps/hermes-agent /var/lib/hermes-agent'
-ssh discovery 'sudo chown -R 10000:10000 /var/lib/hermes-agent'
+If you previously ran hermes from `pip install` or `uv tool install`, your state is in `~/.hermes/` by default. Point the HM module at it:
 
-# (optional) promote to btrfs subvolume
-# requires the dir to be initially a regular dir on a btrfs filesystem
-# safest: snapshot once, then continue using as subvolume on next service start
-
-# deploy NixOS module
-sudo nixos-rebuild switch --flake .#discovery --target-host discovery
-
-# verify
-ssh discovery 'sudo machinectl status hermes; sudo journalctl -M hermes -u hermes-agent -n 30'
+```nix
+programs.hermes-agent.dataDir = "/home/me/.hermes";
 ```
 
-All state — sessions, skills, wiki, kanban — preserved.
+Or migrate to XDG:
 
-## Migration: laptop ~/.hermes (legacy) → nix-managed
-
-The laptop's `~/.hermes/` is already the dataDir per the HM module. No migration needed. But the local `.env` is superseded by sops + shell env exports — safe to delete:
-
-```fish
-# verify sops + env are working
-fish -lc 'env | grep -E "^(OPENAI|HERMES)_"'
-# expect: OPENAI_API_KEY, OPENAI_BASE_URL, HERMES_DEFAULT_MODEL
-
-# then delete the .env (it's been superseded)
-rm ~/.hermes/.env
+```bash
+mv ~/.hermes "$XDG_DATA_HOME/hermes"
 ```
 
-After this, the laptop CLI uses `$OPENAI_API_KEY` (= Discovery's API_SERVER_KEY) + `$OPENAI_BASE_URL` (= Discovery's API gateway) — no local secrets file needed.
-
-## Per-host data dirs
-
-| Host | dataDir |
-|---|---|
-| laptop | `/home/erik/.hermes` (per-user, own brain not used for chat — see CLIENT.md) |
-| Discovery | `/var/lib/hermes-agent` (system service, the actual production brain) |
-
-Discovery's data is the persistent agent — sessions, skills, wiki grow there. Laptop's `~/.hermes` mostly holds local-only state (history, config) since chat is delegated to Discovery via API.
+Once `services.hermes-agent.environmentFile` or `programs.hermes-agent.secrets.*` are wired to a secret store, the standalone `~/.hermes/.env` plaintext file is redundant and can be removed.

@@ -1,6 +1,8 @@
 # hermes-flake
 
-Nix flake packaging [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) for NixOS. Ships:
+Nix flake packaging [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) for NixOS — declarative install, system service, optional container isolation.
+
+Vendor-neutral defaults. Configure model backend, secrets, and platform behavior via module options. Ships:
 
 - `packages.<system>.hermes-agent` — hermes 0.14.0 (3 CLIs: `hermes`, `hermes-acp`, `hermes-agent`).
 - `packages.<system>.hermes-agent-full` — same with all upstream extras (voice, messaging, web, mcp, …).
@@ -43,7 +45,7 @@ Hermes upstream uses `uv` and ships an exact-pinned `uv.lock`. `uv2nix` reads th
               services.hermes-agent = {
                 enable = true;
                 environmentFile = config.sops.secrets."hermes-agent/env".path;
-                telegramAllowedUsers = [ 7729797827 ];
+                telegramAllowedUsers = [ 123456789 ];
                 openFirewall = false;  # SWAG handles external access
                 settings.agent.max_turns = 60;
               };
@@ -114,7 +116,7 @@ Per-route HMAC secrets must be referenced via `WEBHOOK_<ROUTE>_SECRET` env vars 
 
 | Option | Default | Env var |
 |---|---|---|
-| `openaiBaseUrl` | `https://litellm.homelab.pastelariadev.com/v1` | `OPENAI_BASE_URL` |
+| `openaiBaseUrl` | `https://api.openai.com/v1` | `OPENAI_BASE_URL` |
 
 ### systemd hardening
 
@@ -136,7 +138,7 @@ Required env keys (filename of the secret matters less than these key names insi
     HERMES_DISCORD_BOT_TOKEN=...             # renamed from DISCORD_BOT_TOKEN
     EXA_API_KEY=...
 
-The module bridges `HERMES_*_BOT_TOKEN` → the upstream-expected `TELEGRAM_BOT_TOKEN` / `DISCORD_BOT_TOKEN` at process start via the `ExecStart` wrapper. This avoids collision with the homelab Grafana / healthcheck notification stack which already uses unprefixed `TELEGRAM_BOT_TOKEN`.
+The module bridges `HERMES_*_BOT_TOKEN` → upstream-expected `TELEGRAM_BOT_TOKEN` / `DISCORD_BOT_TOKEN` at process start via the `ExecStart` wrapper. The `HERMES_` prefix is recommended when your secret store also serves a notification stack (Grafana / Healthchecks / etc.) that already uses the unprefixed `TELEGRAM_BOT_TOKEN` name — the prefix prevents collision.
 
 ### One-time secret seeding
 
@@ -149,7 +151,7 @@ The module bridges `HERMES_*_BOT_TOKEN` → the upstream-expected `TELEGRAM_BOT_
 
 ## config.yaml
 
-Built-in default tracks the user's battle-tested homelab config — LiteLLM proxy as model backend, `qwen-chat` default, 60-turn max, memory + wiki provider enabled, redact_pii on. Override piecemeal via `services.hermes-agent.settings`:
+Built-in default is vendor-neutral: OpenRouter as the model provider, `anthropic/claude-opus-4.6` as the default model, 60-turn max, memory + wiki provider enabled, `redact_pii` on, all hardening directives applied. Override piecemeal via `services.hermes-agent.settings`:
 
     services.hermes-agent.settings = {
       model.default = "claude-opus-4-7";
@@ -165,50 +167,13 @@ Runtime values for `model.api_key`, `${OPENAI_API_KEY}`, etc come from `Environm
 
 ## SOUL.md
 
-Personality contract. Bundled default reflects homelab operator role. Override:
+Personality contract. Bundled default is a neutral placeholder — override with your own:
 
     services.hermes-agent.soulFile = ./my-soul.md;
 
 ## Migration from Docker
 
-Current state: hermes runs via `machines/discovery/hermes-agent.yml` on host Discovery. Migration steps to swap into the NixOS module:
-
-1.  Stop the container
-
-        ssh discovery 'sudo systemctl stop podman-compose-hermes-agent.service'
-        # or: ssh discovery 'docker stop hermes-agent'
-
-2.  Move data dir
-
-        ssh discovery 'sudo mv /home/erik/homelab/apps/hermes-agent /var/lib/hermes-agent'
-        ssh discovery 'sudo chown -R 10000:10000 /var/lib/hermes-agent'
-
-    If `/var/lib` is on btrfs, convert the moved dir into a proper subvolume after the fact:
-
-        sudo btrfs filesystem usage /var/lib | head        # confirm btrfs
-        # (optional snapshot promotion handled by the bootstrap on next start)
-
-3.  Add the module + sops secret to Discovery's NixOS config (see [example/configuration.nix](example/configuration.nix)).
-
-4.  Switch
-
-        sudo nixos-rebuild switch
-
-5.  Update SWAG upstream
-
-    `machines/discovery/config/swag/nginx/proxy-confs/hermes.subdomain.conf` currently targets the Docker container's DNS name `hermes-agent:8642`. Change to host:
-
-        set $upstream_app 127.0.0.1;
-        set $upstream_port 8642;
-        set $upstream_proto http;
-
-    Reload SWAG: `docker exec swag nginx -s reload`.
-
-6.  Verify
-
-        sudo systemctl status hermes-agent
-        curl http://127.0.0.1:8642/health
-        sudo journalctl -u hermes-agent -f
+If you're migrating from the upstream Docker compose deployment, see [docs/MIGRATION.md](docs/MIGRATION.md).
 
 ## Caveats
 
@@ -249,14 +214,14 @@ Container quickstart:
       containerName = "hermes";
       privateNetwork = false;  # share host net; flip to true for stronger isolation
       hostSecretsPath = config.sops.secrets."hermes-agent/env".path;
-      telegramAllowedUsers = [ 7729797827 ];
+      telegramAllowedUsers = [ 123456789 ];
     };
 
 Full example at [example/discovery-container.nix](example/discovery-container.nix).
 
 ## Client setup (laptop / per-user)
 
-See [docs/CLIENT.md](docs/CLIENT.md). Summary: each hermes install has its own brain. Recommended pattern is local CLI on laptop (separate brain, shared LiteLLM backend) + Telegram/Discord for homelab ops directed at Discovery.
+See [docs/CLIENT.md](docs/CLIENT.md). Summary: each hermes install has its own brain. Either run a per-workstation local CLI (own brain, shared model backend) or point local clients at a remote API server (Pattern B in CLIENT.md).
 
 ## Tests
 

@@ -50,7 +50,7 @@
   '';
 in {
   options.services.hermes-agent = {
-    enable = mkEnableOption "Hermes Agent (NousResearch) — homelab system service";
+    enable = mkEnableOption "Hermes Agent (NousResearch) — autonomous AI agent system service";
 
     package = mkOption {
       type = types.package;
@@ -114,7 +114,7 @@ in {
       default = {};
       description = ''
         Hermes config.yaml content as a Nix attrset, rendered via pkgs.formats.yaml.
-        Merges recursively with the homelab-tuned default in config.yaml.nix.
+        Merges recursively with the bundled default in config.yaml.nix.
       '';
       example = lib.literalExpression ''
         {
@@ -128,8 +128,8 @@ in {
       type = types.nullOr types.path;
       default = null;
       description = ''
-        Path to a SOUL.md personality file. Defaults to the flake's bundled
-        homelab personality.
+        Path to a SOUL.md personality file. Defaults to the bundled
+        placeholder; override with your own persona file.
       '';
     };
 
@@ -159,7 +159,7 @@ in {
       type = types.listOf types.int;
       default = [];
       description = "Telegram user IDs allowed to message the agent (env TELEGRAM_ALLOWED_USERS).";
-      example = [7729797827];
+      example = [123456789];
     };
 
     telegramAllowedChats = mkOption {
@@ -177,8 +177,12 @@ in {
 
     openaiBaseUrl = mkOption {
       type = types.str;
-      default = "https://litellm.homelab.pastelariadev.com/v1";
-      description = "OPENAI_BASE_URL — typically your LiteLLM proxy.";
+      default = "https://api.openai.com/v1";
+      description = ''
+        OPENAI_BASE_URL — set to your provider (OpenAI, OpenRouter, LiteLLM
+        proxy, local llama-server, etc.).
+      '';
+      example = "https://openrouter.ai/api/v1";
     };
 
     apiServerCorsOrigins = mkOption {
@@ -271,10 +275,10 @@ in {
     };
 
     systemd.services.hermes-agent = {
-      description = "Hermes Agent (NousResearch) — homelab gateway";
+      description = "Hermes Agent (NousResearch) — gateway service";
       wantedBy = ["multi-user.target"];
-      wants = ["network-online.target" "tailscaled.service"];
-      after = ["network-online.target" "tailscaled.service"];
+      wants = ["network-online.target"];
+      after = ["network-online.target"];
 
       environment =
         {
@@ -328,10 +332,13 @@ in {
 
         EnvironmentFile = mkIf (cfg.environmentFile != null) cfg.environmentFile;
 
-        # Bridge HERMES_TELEGRAM_BOT_TOKEN → TELEGRAM_BOT_TOKEN (and same for discord)
-        # so the homelab notification stack can keep using TELEGRAM_BOT_TOKEN
-        # without collision.
+        # Bridge HERMES_TELEGRAM_BOT_TOKEN → TELEGRAM_BOT_TOKEN (and same for
+        # discord) so the same env file can be shared with a separate
+        # notification stack that already claims the bare names.
         ExecStart = pkgs.writeShellScript "hermes-exec" ''
+          # Bridge prefixed secrets to upstream-expected names so the same env
+          # file can be shared with other services (notification stacks etc.)
+          # that already claim the bare TELEGRAM_BOT_TOKEN name.
           if [ -n "''${HERMES_TELEGRAM_BOT_TOKEN:-}" ]; then
             export TELEGRAM_BOT_TOKEN="$HERMES_TELEGRAM_BOT_TOKEN"
           fi

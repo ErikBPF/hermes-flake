@@ -96,7 +96,7 @@ in {
 
     openaiBaseUrl = mkOption {
       type = types.str;
-      default = "https://litellm.homelab.pastelariadev.com/v1";
+      default = "https://api.openai.com/v1";
     };
 
     extraServiceOptions = mkOption {

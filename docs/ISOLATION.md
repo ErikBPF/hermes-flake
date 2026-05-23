@@ -1,6 +1,6 @@
 # Isolation Options
 
-Trade-off matrix for hermes-agent on Discovery (24/7 host).
+Trade-off matrix for the host where hermes-agent runs 24/7.
 
 | Approach | Module exposed | Isolation level | Overhead | Declarative | Snapshot-friendly |
 |---|---|---|---|---|---|
@@ -28,7 +28,7 @@ services.hermes-agent-container = {
   privateNetwork = false;  # share host net (simpler)
   hostDataDir = "/var/lib/hermes-agent";
   hostSecretsPath = config.sops.secrets."hermes-agent/env".path;
-  telegramAllowedUsers = [ 7729797827 ];
+  telegramAllowedUsers = [ 123456789 ];
 };
 ```
 
@@ -79,7 +79,7 @@ The hostDataDir is a btrfs subvolume (bootstrap inside the inner `services.herme
 sudo btrfs subvolume snapshot -r /var/lib/hermes-agent /var/lib/snapshots/hermes-$(date +%Y%m%d-%H%M)
 ```
 
-Send/receive to Voyager (offsite) over Tailscale:
+Send/receive to an offsite host (e.g. over Tailscale):
 
 ```fish
 sudo btrfs send /var/lib/snapshots/hermes-... | ssh voyager 'sudo btrfs receive /backup/hermes/'

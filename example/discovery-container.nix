@@ -33,7 +33,7 @@
     hostDataDir = "/var/lib/hermes-agent";
     hostSecretsPath = config.sops.secrets."hermes-agent/env".path;
 
-    telegramAllowedUsers = [7729797827];
+    telegramAllowedUsers = [123456789];
     settings.agent.max_turns = 60;
   };
 }

@@ -112,7 +112,7 @@ in {
       services.hermes-agent = {
         enable = true;
         environmentFile = "/etc/hermes-agent-fake-env";
-        telegramAllowedUsers = [42 7729797827];
+        telegramAllowedUsers = [42 123456789];
         telegramAllowedChats = ["-1001234567890"];
         apiServerCorsOrigins = ["https://hermes.example.com"];
         maxIterations = 120;
@@ -147,7 +147,7 @@ in {
         "WEBHOOK_PORT=8644",
         "HERMES_MAX_ITERATIONS=120",
         "API_SERVER_CORS_ORIGINS=https://hermes.example.com",
-        "TELEGRAM_ALLOWED_USERS=42,7729797827",
+        "TELEGRAM_ALLOWED_USERS=42,123456789",
         "TELEGRAM_ALLOWED_CHATS=-1001234567890",
         "HERMES_DASHBOARD=1",
         "HERMES_PROFILE=test",

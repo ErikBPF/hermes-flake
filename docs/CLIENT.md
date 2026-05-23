@@ -1,88 +1,104 @@
-# Client Setup (Laptop / Per-User)
+# Client Patterns
 
-Hermes has no single-brain-shared-across-machines model. Each install has its own memory + skills. Three patterns for using a remote hermes (Discovery) from a laptop:
+Hermes has no shared-brain-across-machines model. Each install owns its own memory + skills. Four common patterns for using a remote hermes deployment from a workstation:
 
-## Pattern A — Local CLI, shared LiteLLM backend (recommended)
+## Pattern A — Local CLI, shared model backend
 
-Laptop runs its own `hermes` CLI for local terminal work. Shares the LiteLLM endpoint with Discovery so model usage is centralized. Memory stays local to the laptop.
+The workstation runs its own `hermes` CLI for local terminal work. Shares the model endpoint (e.g. a LiteLLM proxy) with the remote service so model usage is centralized. Memory stays local to the workstation.
 
 ```nix
-# In your home-manager config:
 imports = [ hermes-flake.homeManagerModules.default ];
 
 programs.hermes-agent = {
   enable = true;
-  dataDir = "${config.xdg.dataHome}/hermes";  # own memory
+  dataDir = "${config.xdg.dataHome}/hermes";
   secrets = {
     openaiApiKeyFile = config.sops.secrets."hermes-client/openai".path;
     anthropicApiKeyFile = config.sops.secrets."hermes-client/anthropic".path;
   };
   extraEnvironment = {
-    OPENAI_BASE_URL = "https://litellm.homelab.pastelariadev.com/v1";
-    HERMES_DEFAULT_MODEL = "qwen-chat";
+    OPENAI_BASE_URL = "https://api.openai.com/v1";  # or your LiteLLM proxy
+    HERMES_DEFAULT_MODEL = "claude-opus-4-7";
   };
 };
 ```
 
-When to use: ad-hoc local tasks, no need to share state with Discovery.
+When to use: ad-hoc local tasks; no need to share state with a remote brain.
 
-## Pattern B — Web dashboard (no install)
+## Pattern B — Local CLI delegating to a remote API gateway
 
-Discovery's API server is exposed via SWAG. Open in browser:
+Make the workstation's CLI a thin client over the remote service's API server. `OPENAI_BASE_URL` points at the remote, `OPENAI_API_KEY` = remote's `API_SERVER_KEY`. Every chat request flows through the remote hermes process, which then calls upstream models.
 
-    https://hermes.<your-domain>/
+```nix
+programs.hermes-agent.extraEnvironment = {
+  OPENAI_BASE_URL = "https://hermes.example.com/v1";
+};
+programs.hermes-agent.secrets.openaiApiKeyFile =
+  config.sops.secrets."hermes-client/api_key".path;
+```
 
-Auth: `API_SERVER_KEY` header.
+The remote `API_SERVER_KEY` is the bearer; the client's `OPENAI_API_KEY` env var carries it. Chain: local CLI → remote hermes API → upstream provider.
 
-Pros: zero client setup; works on phone/iPad.
-Cons: no terminal integration; no local file access.
+## Pattern C — Web dashboard (no client install)
 
-## Pattern C — Telegram / Discord
+The remote service exposes an OpenAI-compatible endpoint on its API port (default 8642). Point any compatible client at it:
 
-The Discovery hermes is wired to Telegram (Romozinha bot) and Discord (Romozinha#4758). Both work from anywhere with internet.
+- [Open WebUI](https://github.com/open-webui/open-webui)
+- [LibreChat](https://github.com/danny-avila/LibreChat)
+- Built-in hermes dashboard (when `services.hermes-agent.enableDashboard = true`)
 
-Most natural for: status checks, quick queries, "deploy X", "what's running on Orion".
+```
+URL:    https://hermes.example.com/v1
+Bearer: <API_SERVER_KEY>
+```
 
-No client setup needed. The Discovery service handles auth via `TELEGRAM_ALLOWED_USERS` whitelist.
+Best for phone/iPad access.
 
-## Pattern D — ACP bridge (advanced, IDE integration)
+## Pattern D — Telegram / Discord / Slack
 
-`hermes-acp` exposes hermes as an Agent Control Protocol stdio server. Plug into Zed, Cursor, Claude Code, or any ACP-compatible client.
+The remote hermes-agent service has gateway adapters for messaging platforms. Once configured (bot tokens in the `EnvironmentFile`, `TELEGRAM_ALLOWED_USERS` set), users just send DMs / @-mentions.
 
-```fish
-# Local laptop hermes, ACP mode for the IDE
+Best for: quick remote queries from anywhere; phone-friendly; no client install.
+
+## Pattern E — ACP bridge (IDE integration)
+
+`hermes-acp` exposes hermes as an [Agent Control Protocol](https://github.com/Agent-Control-Protocol/) stdio server. Plug into Zed, Cursor, Claude Code, or any ACP-compatible IDE.
+
+```bash
 hermes-acp --setup
-# Edit ~/.hermes/config.yaml — confirm provider/model
-# IDE config: add stdio agent:
+# IDE config — add stdio agent:
 #   command: hermes-acp
 ```
 
-This still runs hermes LOCALLY (your laptop is the executor). To execute remotely against Discovery's hermes, use Pattern B (web API) from the IDE — most IDEs support OpenAI-compatible endpoints, and Discovery's API server is one.
+This runs hermes locally on the workstation. To delegate execution to a remote hermes, use Pattern B from the IDE — most IDEs accept OpenAI-compatible endpoints, and the remote API server is one.
 
 ## Recommendation
 
-Use **A** (local CLI) + **C** (Telegram for homelab ops) together:
+Mix patterns by use case:
 
-- Terminal work, project-scoped tasks → laptop hermes CLI (Pattern A)
-- "Restart hermes on discovery", "what's syncthing doing", quick lookups → Telegram message to Romozinha (Pattern C)
-- Phone access → Telegram (Pattern C) or web dashboard (Pattern B)
+- Terminal work, project-scoped tasks → **A** (local CLI with own brain) or **B** (delegate to remote)
+- Quick remote queries from anywhere → **D** (Telegram/Discord)
+- Phone access → **C** (web dashboard) or **D** (Telegram)
+- IDE-embedded coding agent → **E** (ACP)
 
-## Migration from existing `~/.hermes/`
+## Migration from `pip install` / `uv tool install`
 
-If your laptop already has a hand-rolled `~/.hermes/` from a `uv tool install` era, the nix-managed HM module respects it as `$HERMES_HOME`. You can keep it OR migrate to the module's `dataDir`:
+If you already have a hand-rolled `~/.hermes/` on a workstation, the HM module respects it as `$HERMES_HOME`:
 
-```fish
-# Keep existing
-programs.hermes-agent.dataDir = "/home/erik/.hermes";
+```nix
+programs.hermes-agent.dataDir = "/home/me/.hermes";
+```
 
-# OR migrate to XDG location
+Or move to the XDG default:
+
+```bash
 mv ~/.hermes "$XDG_DATA_HOME/hermes"
 # (module default already points at $XDG_DATA_HOME/hermes)
 ```
 
-Then clean up the stale uv-installed binary:
+Then clean up the standalone CLI install:
 
-```fish
+```bash
 uv tool uninstall hermes-agent
-# Now `which hermes` resolves to ~/.nix-profile/bin/hermes
+# now `which hermes` resolves to ~/.nix-profile/bin/hermes
 ```

@@ -5,48 +5,16 @@
 }: let
   yamlFormat = pkgs.formats.yaml {};
 
-  # Battle-tested default config matching Erik's homelab production hermes
-  # (Discovery host). Values referencing ${VAR} are interpolated at hermes
-  # runtime from EnvironmentFile.
+  # Sensible defaults — vendor-neutral. Override anything via the module's
+  # `services.hermes-agent.settings = {...}` option (merges recursively).
   defaultSettings = {
     model = {
-      provider = "custom";
-      default = "qwen-chat";
-      base_url = "https://litellm.homelab.pastelariadev.com/v1";
+      provider = "auto"; # auto-detect from credentials (OPENROUTER_API_KEY,
+      # OPENAI_API_KEY, ANTHROPIC_API_KEY, NOUS_API_KEY...)
+      default = "anthropic/claude-opus-4.6";
+      base_url = "https://openrouter.ai/api/v1";
       api_key = "\${OPENAI_API_KEY}";
-      max_context = 262144;
-    };
-
-    # Auxiliary model routing — vision / compression / session_search.
-    # All target the same LiteLLM endpoint as the primary model.
-    auxiliary = {
-      vision = {
-        provider = "custom";
-        model = "qwen-chat";
-        base_url = "https://litellm.homelab.pastelariadev.com/v1";
-        api_key = "\${OPENAI_API_KEY}";
-      };
-      compression = {
-        provider = "custom";
-        model = "qwen-chat";
-        base_url = "https://litellm.homelab.pastelariadev.com/v1";
-        api_key = "\${OPENAI_API_KEY}";
-      };
-      session_search = {
-        provider = "custom";
-        model = "qwen-chat";
-        base_url = "https://litellm.homelab.pastelariadev.com/v1";
-        api_key = "\${OPENAI_API_KEY}";
-      };
-    };
-
-    # Named model aliases — let `hermes --model qwen ...` resolve.
-    model_aliases = {
-      qwen = {
-        model = "qwen-chat";
-        provider = "custom";
-        base_url = "https://litellm.homelab.pastelariadev.com/v1";
-      };
+      max_context = 200000;
     };
 
     compression = {
@@ -130,7 +98,7 @@
       redact_pii = true;
     };
 
-    # Platform registration — runtime port/secret/host values flow from env
+    # Platform registration. Runtime port/secret/host values flow from env
     # vars via gateway/config.py.
     platforms = {
       api_server = {

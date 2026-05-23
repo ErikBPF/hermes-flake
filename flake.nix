@@ -1,5 +1,5 @@
 {
-  description = "Nix flake for NousResearch/hermes-agent — homelab integration";
+  description = "Nix flake packaging NousResearch/hermes-agent with NixOS service module";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -120,6 +120,12 @@
         };
 
         homeManagerModules.hermes-agent = self.homeManagerModules.default;
+
+        # Overlay — `pkgs.hermes-agent` for downstream consumers.
+        overlays.default = final: prev: {
+          hermes-agent = self.packages.${prev.system}.hermes-agent;
+          hermes-agent-full = self.packages.${prev.system}.hermes-agent-full;
+        };
       };
     };
 }

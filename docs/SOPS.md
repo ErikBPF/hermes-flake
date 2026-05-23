@@ -25,22 +25,22 @@ sops = {
 
   secrets = {
     "anthropic" = {
-      owner = config.users.users.erik.name;
+      owner = "hermes";
       mode = "0400";
       path = "/run/secrets/hermes/anthropic";
     };
     "openai" = {
-      owner = config.users.users.erik.name;
+      owner = "hermes";
       mode = "0400";
       path = "/run/secrets/hermes/openai";
     };
     "openrouter" = {
-      owner = config.users.users.erik.name;
+      owner = "hermes";
       mode = "0400";
       path = "/run/secrets/hermes/openrouter";
     };
     "exa" = {
-      owner = config.users.users.erik.name;
+      owner = "hermes";
       mode = "0400";
       path = "/run/secrets/hermes/exa";
     };
@@ -99,7 +99,7 @@ sops secrets/hermes.yaml
 If you don't want sops, point the key files at plain files outside the repo:
 
 ```nix
-programs.hermes-agent.secrets.anthropicApiKeyFile = "/home/erik/.secrets/anthropic";
+programs.hermes-agent.secrets.anthropicApiKeyFile = "/var/lib/hermes-agent-secrets/anthropic";
 ```
 
 Then `echo "sk-ant-..." > ~/.secrets/anthropic && chmod 600 ~/.secrets/anthropic`. Less safe, no encryption-at-rest in your dotfiles repo, but simplest.

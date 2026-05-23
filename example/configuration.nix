@@ -25,7 +25,7 @@
   services.hermes-agent = {
     enable = true;
     environmentFile = config.sops.secrets."hermes-agent/env".path;
-    telegramAllowedUsers = [7729797827];
+    telegramAllowedUsers = [123456789];
     openFirewall = false;
 
     settings = {

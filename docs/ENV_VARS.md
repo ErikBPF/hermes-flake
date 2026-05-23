@@ -26,7 +26,7 @@ Three buckets: ones the flake exposes as module options (declarative), ones that
 | `TELEGRAM_ALLOWED_USERS` | `telegramAllowedUsers` (list joined `,`) | unset |
 | `TELEGRAM_ALLOWED_CHATS` | `telegramAllowedChats` (list joined `,`) | unset |
 | `TELEGRAM_ALLOWED_TOPICS` | `telegramAllowedTopics` (list joined `,`) | unset |
-| `OPENAI_BASE_URL` | `openaiBaseUrl` | `https://litellm.homelab.pastelariadev.com/v1` |
+| `OPENAI_BASE_URL` | `openaiBaseUrl` | `https://api.openai.com/v1` |
 
 ## Sops EnvironmentFile (secrets)
 
@@ -40,7 +40,7 @@ Define these inside the `hermes_server.env` block in `secrets.yaml`. The systemd
 | `API_SERVER_KEY` | required when `openBindAddress != 127.0.0.1` | 48-char hex bearer for API server |
 | `WEBHOOK_SECRET` | recommended | Global webhook HMAC fallback (used when a route omits its own) |
 | `WEBHOOK_<ROUTE>_SECRET` | per-route | HMAC for each named route (see `docs/WEBHOOK_ROUTES.md`) |
-| `HERMES_TELEGRAM_BOT_TOKEN` | yes (if telegram) | Token from BotFather — bridged → `TELEGRAM_BOT_TOKEN` at exec to avoid collision with homelab notification stack |
+| `HERMES_TELEGRAM_BOT_TOKEN` | yes (if telegram) | Token from BotFather — bridged → `TELEGRAM_BOT_TOKEN` at exec to avoid collision with downstream notification stack (Grafana, Healthchecks, etc.) |
 | `HERMES_DISCORD_BOT_TOKEN` | yes (if discord) | Same pattern → `DISCORD_BOT_TOKEN` |
 | `EXA_API_KEY` | optional | Exa search tool |
 | `ANTHROPIC_API_KEY` | optional | Direct Anthropic provider |
@@ -81,7 +81,7 @@ Full grep of upstream `os.environ.get` calls produces ~50 `HERMES_*` vars; only 
 | Tool guardrails | `tool_loop_guardrails.{...}` |
 | Skills creation prompt cadence | `skills.creation_nudge_interval` |
 
-All of these go through `services.hermes-agent.settings.<path>`. The flake's default config (`config.yaml.nix`) sets the homelab-tuned values; override piecemeal.
+All of these go through `services.hermes-agent.settings.<path>`. The flake's default config (`config.yaml.nix`) sets vendor-neutral starting values; override piecemeal.
 
 ## Env vs config.yaml precedence
 
@@ -91,4 +91,4 @@ When both are set, **env wins** (gateway/config.py merges env into config at run
 - `TELEGRAM_ALLOWED_USERS` env overrides `platforms.telegram.allowed_users` in YAML
 - `API_SERVER_PORT` env overrides nothing in YAML (no YAML field for it)
 
-For the homelab deployment, declarative env (from module options) is the canonical source. Don't hand-edit `config.yaml` for these — change `services.hermes-agent.*` and rebuild.
+Declarative env (from module options) is the canonical source. Don't hand-edit `config.yaml` for these — change `services.hermes-agent.*` and rebuild.

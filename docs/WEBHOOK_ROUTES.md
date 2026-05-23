@@ -73,7 +73,7 @@ openssl rand -hex 32
 ## Verifying
 
 ```fish
-# Discovery side — confirm route registered
+# on the host running hermes — confirm route registered
 ssh discovery 'sudo journalctl -M hermes -u hermes-agent --since "5 min ago" | grep webhook'
 # expect: [webhook] Listening on 0.0.0.0:8644 — routes: github-ci, linear-incident
 
