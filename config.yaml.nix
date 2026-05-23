@@ -17,6 +17,38 @@
       max_context = 262144;
     };
 
+    # Auxiliary model routing — vision / compression / session_search.
+    # All target the same LiteLLM endpoint as the primary model.
+    auxiliary = {
+      vision = {
+        provider = "custom";
+        model = "qwen-chat";
+        base_url = "https://litellm.homelab.pastelariadev.com/v1";
+        api_key = "\${OPENAI_API_KEY}";
+      };
+      compression = {
+        provider = "custom";
+        model = "qwen-chat";
+        base_url = "https://litellm.homelab.pastelariadev.com/v1";
+        api_key = "\${OPENAI_API_KEY}";
+      };
+      session_search = {
+        provider = "custom";
+        model = "qwen-chat";
+        base_url = "https://litellm.homelab.pastelariadev.com/v1";
+        api_key = "\${OPENAI_API_KEY}";
+      };
+    };
+
+    # Named model aliases — let `hermes --model qwen ...` resolve.
+    model_aliases = {
+      qwen = {
+        model = "qwen-chat";
+        provider = "custom";
+        base_url = "https://litellm.homelab.pastelariadev.com/v1";
+      };
+    };
+
     compression = {
       enabled = true;
       threshold = 0.50;
@@ -51,6 +83,16 @@
     tool_loop_guardrails = {
       warnings_enabled = true;
       hard_stop_enabled = false;
+      warn_after = {
+        exact_failure = 2;
+        same_tool_failure = 3;
+        idempotent_no_progress = 2;
+      };
+      hard_stop_after = {
+        exact_failure = 5;
+        same_tool_failure = 8;
+        idempotent_no_progress = 5;
+      };
     };
 
     session_reset = {
@@ -77,7 +119,12 @@
     stt = {
       enabled = true;
       provider = "local";
+      local = {
+        model = "base";
+      };
     };
+
+    file_read_max_chars = 100000;
 
     privacy = {
       redact_pii = true;
