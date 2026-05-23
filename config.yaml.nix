@@ -58,15 +58,43 @@
       lifetime_seconds = 300;
     };
 
-    # Gateway platform sections are informational here — runtime values come
-    # from env vars (API_SERVER_*, WEBHOOK_*, HERMES_TELEGRAM_BOT_TOKEN, etc).
-    gateway = {
-      platforms = {
-        api_server = {enabled = true;};
-        webhook = {enabled = true;};
-        telegram = {enabled = true;};
-        discord = {enabled = true;};
+    # Platforms — port/secret/host typically come from env (gateway/config.py
+    # injects env values into these blocks at runtime). Keep declarations here
+    # so the platforms are registered + non-env settings persist.
+    platforms = {
+      api_server = {
+        enabled = true;
       };
+      webhook = {
+        enabled = true;
+        # Routes are config-only (env can't define routes). Each route MUST
+        # have an HMAC secret. Example shape:
+        #
+        # extra:
+        #   routes:
+        #     ci:
+        #       hmac_secret_env: WEBHOOK_CI_SECRET  # reads $WEBHOOK_CI_SECRET
+        #       prompt: "CI event: {{ payload.action }} on {{ payload.repo }}"
+      };
+      telegram = {
+        enabled = true;
+        reply_to_mode = "first";
+        guest_mode = false;
+        extra = {
+          disable_link_previews = false;
+        };
+      };
+    };
+
+    # Discord settings live at TOP LEVEL (not under platforms.discord) per
+    # upstream schema.
+    discord = {
+      require_mention = true;
+      auto_thread = true;
+      free_response_channels = "";
+      reactions = true;
+      history_backfill = true;
+      history_backfill_limit = 50;
     };
 
     agent = {

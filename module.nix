@@ -158,14 +158,79 @@ in {
     telegramAllowedUsers = mkOption {
       type = types.listOf types.int;
       default = [];
-      description = "Telegram user IDs allowed to message the agent.";
+      description = "Telegram user IDs allowed to message the agent (env TELEGRAM_ALLOWED_USERS).";
       example = [7729797827];
+    };
+
+    telegramAllowedChats = mkOption {
+      type = types.listOf types.str;
+      default = [];
+      description = "Telegram group chat IDs allowed (env TELEGRAM_ALLOWED_CHATS).";
+      example = ["-1001234567890"];
+    };
+
+    telegramAllowedTopics = mkOption {
+      type = types.listOf types.str;
+      default = [];
+      description = "Telegram forum topic IDs allowed (env TELEGRAM_ALLOWED_TOPICS).";
     };
 
     openaiBaseUrl = mkOption {
       type = types.str;
       default = "https://litellm.homelab.pastelariadev.com/v1";
       description = "OPENAI_BASE_URL — typically your LiteLLM proxy.";
+    };
+
+    apiServerCorsOrigins = mkOption {
+      type = types.listOf types.str;
+      default = [];
+      description = "CORS allow-origins for the API server (env API_SERVER_CORS_ORIGINS, comma-joined).";
+      example = ["https://hermes.example.com"];
+    };
+
+    apiServerModelName = mkOption {
+      type = types.str;
+      default = "";
+      description = "Override model name for API server requests (env API_SERVER_MODEL_NAME).";
+    };
+
+    maxIterations = mkOption {
+      type = types.int;
+      default = 90;
+      description = ''
+        HERMES_MAX_ITERATIONS — per API-server request iteration cap.
+        Separate from agent.max_turns (which governs chat turns).
+      '';
+    };
+
+    enableDashboard = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Run the hermes web dashboard (port 9119 by default) alongside the gateway.
+        Sets HERMES_DASHBOARD=1. Bind via dashboardHost / dashboardPort.
+      '';
+    };
+
+    dashboardHost = mkOption {
+      type = types.str;
+      default = "127.0.0.1";
+      description = "Dashboard bind addr (HERMES_DASHBOARD_HOST).";
+    };
+
+    dashboardPort = mkOption {
+      type = types.port;
+      default = 9119;
+      description = "Dashboard port (HERMES_DASHBOARD_PORT).";
+    };
+
+    profile = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = ''
+        Hermes profile name (HERMES_PROFILE). Enables running multiple isolated
+        gateway profiles from the same dataDir.
+      '';
     };
 
     memoryMax = mkOption {
@@ -211,28 +276,49 @@ in {
       wants = ["network-online.target" "tailscaled.service"];
       after = ["network-online.target" "tailscaled.service"];
 
-      environment = {
-        # HERMES_HOME points at mutable storage so lazy deps land outside the nix store.
-        HERMES_HOME = cfg.dataDir;
-        HERMES_CONFIG_FILE = "${cfg.dataDir}/config.yaml";
-        HERMES_SOUL_FILE = "${cfg.dataDir}/SOUL.md";
+      environment =
+        {
+          # HERMES_HOME points at mutable storage so lazy deps land outside the nix store.
+          HERMES_HOME = cfg.dataDir;
+          HERMES_CONFIG_FILE = "${cfg.dataDir}/config.yaml";
+          HERMES_SOUL_FILE = "${cfg.dataDir}/SOUL.md";
+          HERMES_MAX_ITERATIONS = toString cfg.maxIterations;
 
-        API_SERVER_ENABLED = "true";
-        API_SERVER_HOST = cfg.openBindAddress;
-        API_SERVER_PORT = toString cfg.apiPort;
+          API_SERVER_ENABLED = "true";
+          API_SERVER_HOST = cfg.openBindAddress;
+          API_SERVER_PORT = toString cfg.apiPort;
 
-        WEBHOOK_ENABLED = "true";
-        WEBHOOK_PORT = toString cfg.webhookPort;
+          WEBHOOK_ENABLED = "true";
+          WEBHOOK_PORT = toString cfg.webhookPort;
 
-        TELEGRAM_ALLOWED_USERS = lib.concatMapStringsSep "," toString cfg.telegramAllowedUsers;
+          TELEGRAM_ALLOWED_USERS = lib.concatMapStringsSep "," toString cfg.telegramAllowedUsers;
 
-        OPENAI_BASE_URL = cfg.openaiBaseUrl;
-
-        # Bridge HERMES_*_BOT_TOKEN env keys (from sops, avoiding collision with
-        # notification stack) into the upstream-expected names at process start.
-        # Done via ExecStart wrapper below since systemd Environment= cannot
-        # reference other env vars.
-      };
+          OPENAI_BASE_URL = cfg.openaiBaseUrl;
+        }
+        // (lib.optionalAttrs (cfg.apiServerCorsOrigins != []) {
+          API_SERVER_CORS_ORIGINS = lib.concatStringsSep "," cfg.apiServerCorsOrigins;
+        })
+        // (lib.optionalAttrs (cfg.apiServerModelName != "") {
+          API_SERVER_MODEL_NAME = cfg.apiServerModelName;
+        })
+        // (lib.optionalAttrs (cfg.telegramAllowedChats != []) {
+          TELEGRAM_ALLOWED_CHATS = lib.concatStringsSep "," cfg.telegramAllowedChats;
+        })
+        // (lib.optionalAttrs (cfg.telegramAllowedTopics != []) {
+          TELEGRAM_ALLOWED_TOPICS = lib.concatStringsSep "," cfg.telegramAllowedTopics;
+        })
+        // (lib.optionalAttrs cfg.enableDashboard {
+          HERMES_DASHBOARD = "1";
+          HERMES_DASHBOARD_HOST = cfg.dashboardHost;
+          HERMES_DASHBOARD_PORT = toString cfg.dashboardPort;
+        })
+        // (lib.optionalAttrs (cfg.profile != null) {
+          HERMES_PROFILE = cfg.profile;
+        });
+      # Bridge HERMES_*_BOT_TOKEN -> TELEGRAM_BOT_TOKEN / DISCORD_BOT_TOKEN
+      # WEBHOOK_SECRET, OPENAI_API_KEY etc come from EnvironmentFile (sops).
+      # Bridge happens inside ExecStart wrapper below since systemd Environment=
+      # cannot reference other env vars.
 
       serviceConfig = {
         Type = "exec";
