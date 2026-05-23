@@ -1,0 +1,33 @@
+hermes-flake
+============
+
+This repository is a third-party Nix packaging of `hermes-agent`.
+
+`hermes-agent` is the work of NousResearch:
+
+  https://github.com/NousResearch/hermes-agent
+  https://nousresearch.com
+
+The `hermes-agent` source is fetched at the upstream-tagged commit and built
+unmodified — this flake does not patch the agent's code. All credit for the
+agent itself belongs to NousResearch.
+
+This wrapper repository contributes:
+
+  - A `nix2nix`-compatible derivation (uv2nix) that reproduces hermes-agent
+    builds from upstream's `uv.lock`.
+  - NixOS service module (`services.hermes-agent`).
+  - Wrapper modules for systemd-nspawn containers, podman/docker, and
+    microvm.nix VMs.
+  - A home-manager module for per-user installs.
+  - Documentation describing NixOS-specific integration patterns (sops-nix,
+    btrfs subvolumes, EnvironmentFile, isolation trade-offs).
+
+This wrapper is NOT endorsed by, sponsored by, or affiliated with NousResearch.
+
+For bugs / feature requests:
+
+  - In the agent itself  → https://github.com/NousResearch/hermes-agent
+  - In the Nix packaging → https://github.com/ErikBPF/hermes-flake
+
+License: MIT (mirrors upstream).

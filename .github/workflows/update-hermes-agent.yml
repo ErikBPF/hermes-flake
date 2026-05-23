@@ -1,0 +1,101 @@
+name: Update Hermes Agent Version
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # hourly
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Check for updates
+        id: check
+        run: |
+          if ./scripts/update-version.sh --check; then
+            echo "update_needed=false" >> "$GITHUB_OUTPUT"
+          else
+            current=$(sed -n 's|.*github:NousResearch/hermes-agent/\([^"]*\)".*|\1|p' flake.nix | head -1)
+            latest=$(curl -sf https://api.github.com/repos/NousResearch/hermes-agent/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+            echo "current=$current" >> "$GITHUB_OUTPUT"
+            echo "latest=$latest"  >> "$GITHUB_OUTPUT"
+            echo "update_needed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply update
+        if: steps.check.outputs.update_needed == 'true'
+        run: ./scripts/update-version.sh
+
+      - name: Create pull request
+        if: steps.check.outputs.update_needed == 'true'
+        id: create-pr
+        uses: peter-evans/create-pull-request@v8
+        env:
+          CURRENT: ${{ steps.check.outputs.current }}
+          LATEST: ${{ steps.check.outputs.latest }}
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: bump hermes-agent to ${{ steps.check.outputs.latest }}"
+          title: "chore: bump hermes-agent ${{ steps.check.outputs.current }} → ${{ steps.check.outputs.latest }}"
+          body: |
+            ## Automated hermes-agent bump
+
+            Updates the `hermes-agent-src` flake input from `${{ steps.check.outputs.current }}` to `${{ steps.check.outputs.latest }}`.
+
+            ### Verified
+            - `nix build .#hermes-agent` succeeds locally in the workflow runner.
+            - Smoke check (`checks.<system>.smoke`) runs as part of CI on this PR.
+
+            ### Review-worthy if
+            - The upstream release notes mention a config/env schema change — eyeball `docs/ENV_VARS.md` and `config.yaml.nix`.
+            - C-extension deps changed — `overrides.nix` may need an update.
+
+            *This PR was generated automatically by `.github/workflows/update-hermes-agent.yml`.*
+          branch: update-hermes-agent-${{ steps.check.outputs.latest }}
+          delete-branch: true
+          labels: |
+            dependencies
+            automated
+
+      - name: Enable auto-merge
+        if: steps.check.outputs.update_needed == 'true' && steps.create-pr.outputs.pull-request-number
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.create-pr.outputs.pull-request-number }}
+        run: gh pr merge "$PR_NUMBER" --auto --squash --delete-branch
+
+      - name: Summary
+        if: always()
+        env:
+          CURRENT: ${{ steps.check.outputs.current }}
+          LATEST: ${{ steps.check.outputs.latest }}
+          NEEDED: ${{ steps.check.outputs.update_needed }}
+        run: |
+          {
+            echo "## Update summary"
+            echo
+            if [ "$NEEDED" = "true" ]; then
+              echo "- Current: \`$CURRENT\`"
+              echo "- Latest:  \`$LATEST\`"
+              echo
+              echo "✅ Pull request created."
+            else
+              current=$(sed -n 's|.*github:NousResearch/hermes-agent/\([^"]*\)".*|\1|p' flake.nix | head -1)
+              echo "- Pinned at \`$current\` — already up to date."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

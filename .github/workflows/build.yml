@@ -1,0 +1,66 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-latest
+          - system: aarch64-linux
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: nix flake check (eval only — fast)
+        run: nix flake check --no-build
+
+      - name: lint (alejandra/statix/deadnix)
+        run: nix build .#checks.${{ matrix.system }}.lint --print-build-logs
+
+      - name: smoke (base)
+        run: nix build .#checks.${{ matrix.system }}.smoke --print-build-logs
+
+      - name: config-yaml-schema
+        run: nix build .#checks.${{ matrix.system }}.config-yaml-schema --print-build-logs
+
+      - name: config-yaml-override
+        run: nix build .#checks.${{ matrix.system }}.config-yaml-override --print-build-logs
+
+      - name: closure-size guard
+        run: nix build .#checks.${{ matrix.system }}.closure-size --print-build-logs
+
+      - name: build hermes-agent (base)
+        run: nix build .#hermes-agent --print-build-logs
+
+      - name: build with extras = [voice, anthropic, mcp]
+        run: |
+          nix build --impure --print-build-logs --expr \
+            '(builtins.getFlake (toString ./.)).packages.${{ matrix.system }}.hermes-agent.withExtras [ "voice" "anthropic" "mcp" ]'
+
+      - name: build hermes-agent-full (best-effort — DingTalk + Feishu may fail)
+        continue-on-error: true
+        run: nix build .#checks.${{ matrix.system }}.smoke-full --print-build-logs
+
+      - name: NixOS VM module test (best-effort)
+        continue-on-error: true
+        if: matrix.system == 'x86_64-linux'
+        run: nix build .#checks.${{ matrix.system }}.nixos-module --print-build-logs
