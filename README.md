@@ -57,24 +57,72 @@ Full example at [`example/configuration.nix`](example/configuration.nix).
 
 ## Module options
 
-| Option | Default | Purpose |
+Each option maps to an upstream env var or `config.yaml` field. See [`docs/ENV_VARS.md`](docs/ENV_VARS.md) for the full upstream-truth-table.
+
+### Core
+
+| Option | Default | Purpose / Maps to |
 |---|---|---|
 | `enable` | false | Toggle the service |
 | `package` | `flake.packages.hermes-agent` | Variant to run |
 | `user` / `group` | `hermes` / `hermes` (UID/GID 10000) | Run identity — UID matches migrated Docker volumes |
-| `dataDir` | `/var/lib/hermes-agent` | Persistent state (btrfs subvolume if FS supports it) |
-| `environmentFile` | `null` | Path to sops-rendered dotenv |
-| `configFile` | `null` (uses generated) | Override path to `config.yaml` |
-| `settings` | `{}` | Nix attrset → YAML, merged into default config |
-| `soulFile` | `null` (uses bundled) | Override `SOUL.md` |
-| `openBindAddress` | `0.0.0.0` | API server bind |
-| `apiPort` | `8642` | API server port |
-| `webhookPort` | `8644` | Webhook gateway port |
-| `telegramAllowedUsers` | `[]` | Whitelist user IDs |
-| `openaiBaseUrl` | `https://litellm.homelab.pastelariadev.com/v1` | LiteLLM proxy |
-| `memoryMax` | `2G` | systemd `MemoryMax` |
-| `cpuQuota` | `200%` | systemd `CPUQuota` |
-| `openFirewall` | `false` | Open apiPort + webhookPort |
+| `dataDir` | `/var/lib/hermes-agent` | `HERMES_HOME` — persistent state (btrfs subvolume if FS supports it) |
+| `environmentFile` | `null` | sops-rendered dotenv path → systemd `EnvironmentFile=` |
+| `configFile` | `null` (uses generated) | `HERMES_CONFIG_FILE` |
+| `settings` | `{}` | Nix attrset → `config.yaml`, merged into default |
+| `soulFile` | `null` (uses bundled) | `HERMES_SOUL_FILE` |
+| `profile` | `null` | `HERMES_PROFILE` — multi-profile selector |
+
+### API server (port 8642 default)
+
+| Option | Default | Env var |
+|---|---|---|
+| `openBindAddress` | `0.0.0.0` | `API_SERVER_HOST` |
+| `apiPort` | `8642` | `API_SERVER_PORT` |
+| `apiServerCorsOrigins` | `[]` | `API_SERVER_CORS_ORIGINS` (comma-joined) |
+| `apiServerModelName` | `""` | `API_SERVER_MODEL_NAME` |
+| `maxIterations` | `90` | `HERMES_MAX_ITERATIONS` |
+| (env-only) | — | `API_SERVER_KEY` — set via sops EnvironmentFile |
+
+### Webhook gateway (port 8644 default)
+
+| Option | Default | Env var |
+|---|---|---|
+| `webhookPort` | `8644` | `WEBHOOK_PORT` |
+| (env-only) | — | `WEBHOOK_SECRET` — set via sops EnvironmentFile (global HMAC fallback) |
+
+Per-route HMAC secrets must be referenced via `WEBHOOK_<ROUTE>_SECRET` env vars and declared in `services.hermes-agent.settings.platforms.webhook.extra.routes.<name>.hmac_secret_env`. See [`docs/WEBHOOK_ROUTES.md`](docs/WEBHOOK_ROUTES.md).
+
+### Telegram
+
+| Option | Default | Env var |
+|---|---|---|
+| `telegramAllowedUsers` | `[]` | `TELEGRAM_ALLOWED_USERS` |
+| `telegramAllowedChats` | `[]` | `TELEGRAM_ALLOWED_CHATS` |
+| `telegramAllowedTopics` | `[]` | `TELEGRAM_ALLOWED_TOPICS` |
+| (env-only via sops) | — | `HERMES_TELEGRAM_BOT_TOKEN` (bridged to `TELEGRAM_BOT_TOKEN`) |
+
+### Dashboard (port 9119, off by default)
+
+| Option | Default | Env var |
+|---|---|---|
+| `enableDashboard` | `false` | `HERMES_DASHBOARD=1` |
+| `dashboardHost` | `127.0.0.1` | `HERMES_DASHBOARD_HOST` |
+| `dashboardPort` | `9119` | `HERMES_DASHBOARD_PORT` |
+
+### Model backend
+
+| Option | Default | Env var |
+|---|---|---|
+| `openaiBaseUrl` | `https://litellm.homelab.pastelariadev.com/v1` | `OPENAI_BASE_URL` |
+
+### systemd hardening
+
+| Option | Default | Purpose |
+|---|---|---|
+| `memoryMax` | `2G` | `MemoryMax=` |
+| `cpuQuota` | `200%` | `CPUQuota=` |
+| `openFirewall` | `false` | Open `apiPort` + `webhookPort` |
 
 ## sops-nix integration
 
@@ -210,8 +258,29 @@ Full example at [example/discovery-container.nix](example/discovery-container.ni
 
 See [docs/CLIENT.md](docs/CLIENT.md). Summary: each hermes install has its own brain. Recommended pattern is local CLI on laptop (separate brain, shared LiteLLM backend) + Telegram/Discord for homelab ops directed at Discovery.
 
+## Tests
+
+`nix flake check` covers:
+
+| Check | What it verifies | Cost |
+|---|---|---|
+| `smoke` | binary runs, prints v0.14.0, all 3 entry points exist | ~2 min cold, free warm |
+| `smoke-full` | full variant builds | ~5 min cold |
+| `config-yaml-schema` | rendered YAML has `discord:` at top-level, `platforms.{api_server,webhook,telegram}` registered | ~1s |
+| `config-yaml-override` | `settings = { agent.max_turns = 120; }` overrides apply correctly | ~1s |
+| `nixos-module` | NixOS VM boots with module, asserts UID 10000, env vars exported, hardening directives present, bot-token bridge in ExecStart | ~5 min |
+
+Run them locally:
+
+    nix flake check --print-build-logs
+    nix build .#checks.x86_64-linux.config-yaml-schema   # individual
+
+CI runs all of them on `x86_64-linux` + `aarch64-linux`. VM test is `x86_64-linux` only (KVM-dependent).
+
 ## See also
 
+- [docs/ENV_VARS.md](docs/ENV_VARS.md) — full upstream env var reference (audited)
+- [docs/WEBHOOK_ROUTES.md](docs/WEBHOOK_ROUTES.md) — webhook routes + per-route HMAC pattern
 - [docs/SOPS.md](docs/SOPS.md) — sops-nix integration recipe
 - [docs/ISOLATION.md](docs/ISOLATION.md) — bare-metal vs container vs VM trade-offs
 - [docs/CLIENT.md](docs/CLIENT.md) — laptop client patterns (A/B/C/D)

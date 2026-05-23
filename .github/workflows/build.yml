@@ -29,17 +29,26 @@ jobs:
 
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - name: nix flake check
+      - name: nix flake check (eval only — fast)
         run: nix flake check --no-build
+
+      - name: smoke (base)
+        run: nix build .#checks.${{ matrix.system }}.smoke --print-build-logs
+
+      - name: config-yaml-schema
+        run: nix build .#checks.${{ matrix.system }}.config-yaml-schema --print-build-logs
+
+      - name: config-yaml-override
+        run: nix build .#checks.${{ matrix.system }}.config-yaml-override --print-build-logs
 
       - name: build hermes-agent (base)
         run: nix build .#hermes-agent --print-build-logs
 
-      - name: smoke test
-        run: |
-          ./result/bin/hermes --version
-          ./result/bin/hermes --help > /dev/null
-
-      - name: build hermes-agent-full (best-effort)
+      - name: full variant (best-effort)
         continue-on-error: true
-        run: nix build .#hermes-agent-full --print-build-logs
+        run: nix build .#checks.${{ matrix.system }}.smoke-full --print-build-logs
+
+      - name: NixOS VM module test (best-effort)
+        continue-on-error: true
+        if: matrix.system == 'x86_64-linux'
+        run: nix build .#checks.${{ matrix.system }}.nixos-module --print-build-logs
