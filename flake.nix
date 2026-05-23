@@ -1,5 +1,5 @@
 {
-  description = "Nix flake for NousResearch/hermes-agent — packaged with uv2nix";
+  description = "Nix flake for NousResearch/hermes-agent — homelab integration";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -37,10 +37,7 @@
     self,
     nixpkgs,
     flake-parts,
-    uv2nix,
-    pyproject-nix,
-    pyproject-build-systems,
-    hermes-agent-src,
+    ...
   }:
     flake-parts.lib.mkFlake {inherit inputs;} {
       systems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin"];
@@ -51,100 +48,67 @@
         lib,
         ...
       }: let
-        python = pkgs.python313;
-
-        workspace = uv2nix.lib.workspace.loadWorkspace {
-          workspaceRoot = hermes-agent-src;
-        };
-
-        overlay = workspace.mkPyprojectOverlay {
-          sourcePreference = "wheel";
-        };
-
-        overrides = import ./overrides.nix {inherit pkgs lib;};
-
-        pythonSet =
-          (pkgs.callPackage pyproject-nix.build.packages {
-            inherit python;
-          })
-          .overrideScope (
-            lib.composeManyExtensions [
-              pyproject-build-systems.overlays.default
-              overlay
-              overrides
-            ]
-          );
-
-        # Build a venv with a given dep selection.
-        mkHermesVenv = depGroups:
-          pythonSet.mkVirtualEnv "hermes-agent-env" depGroups;
-
-        # Wrap venv → expose CLI entry points under $out/bin.
-        mkHermesPkg = {
-          name,
-          depGroups,
-        }:
-          pkgs.runCommandLocal name {
-            meta = {
-              description = "NousResearch hermes-agent (${name})";
-              homepage = "https://github.com/NousResearch/hermes-agent";
-              license = lib.licenses.mit;
-              mainProgram = "hermes";
-              platforms = lib.platforms.unix;
-            };
-            passthru = {
-              venv = mkHermesVenv depGroups;
-              inherit python;
-            };
-          } ''
-            mkdir -p $out/bin
-            for bin in hermes hermes-agent hermes-acp; do
-              if [ -x ${mkHermesVenv depGroups}/bin/$bin ]; then
-                ln -s ${mkHermesVenv depGroups}/bin/$bin $out/bin/$bin
-              fi
-            done
-          '';
-      in {
-        _module.args.pkgs = import nixpkgs {
+        pkgsUnfree = import nixpkgs {
           inherit system;
           config.allowUnfree = true;
         };
 
+        hermesPackages = import ./package.nix {
+          pkgs = pkgsUnfree;
+          inherit lib inputs system;
+        };
+      in {
+        _module.args.pkgs = pkgsUnfree;
+
         packages = {
-          default = self.packages.${system}.hermes-agent;
-
-          hermes-agent = mkHermesPkg {
-            name = "hermes-agent";
-            depGroups = workspace.deps.default;
-          };
-
-          hermes-agent-full = mkHermesPkg {
-            name = "hermes-agent-full";
-            depGroups = workspace.deps.all;
-          };
+          default = hermesPackages.hermes-agent;
+          inherit (hermesPackages) hermes-agent hermes-agent-full;
         };
 
         apps = {
           default = {
             type = "app";
-            program = "${self.packages.${system}.hermes-agent}/bin/hermes";
+            program = "${hermesPackages.hermes-agent}/bin/hermes";
+            meta.description = "Run hermes CLI";
+          };
+          hermes-acp = {
+            type = "app";
+            program = "${hermesPackages.hermes-agent}/bin/hermes-acp";
+            meta.description = "Run hermes-acp adapter";
+          };
+          hermes-agent = {
+            type = "app";
+            program = "${hermesPackages.hermes-agent}/bin/hermes-agent";
+            meta.description = "Run hermes-agent runner";
           };
         };
 
-        checks = {
-          smoke = pkgs.runCommand "hermes-smoke" {} ''
-            ${self.packages.${system}.hermes-agent}/bin/hermes --version > $out
-          '';
+        checks = import ./checks.nix {
+          inherit pkgs lib self system;
         };
 
         formatter = pkgs.alejandra;
       };
 
       flake = {
-        # home-manager module — consumers add this to their hm.modules list.
+        nixosModules.default = {
+          config,
+          lib,
+          pkgs,
+          ...
+        }:
+          import ./module.nix {
+            inherit config lib pkgs;
+            flakePackages = self.packages;
+          };
+
+        nixosModules.hermes-agent = self.nixosModules.default;
+
         homeManagerModules.default = import ./modules/home-manager.nix {
           inherit (self) packages;
         };
+
+        homeManagerModules.hermes-agent = self.homeManagerModules.default;
       };
     };
 }
