@@ -14,7 +14,7 @@ Vendor-neutral defaults. Configure model backend, secrets, and platform behavior
 - `packages.<system>.hermes-agent-full` — every declared extra (may fail until upstream sdist build issues are patched).
 - `nixosModules.default` — system service with sops-nix `EnvironmentFile`, btrfs subvolume bootstrap, hardening, healthcheck.
 - `homeManagerModules.default` — per-user install for desktops.
-- `checks.<system>.{smoke,module-eval}` — `nix flake check` covers binary + module validity.
+- `checks.<system>.{smoke,smoke-full,config-yaml-schema,config-yaml-override,closure-size,nixos-module}` — `nix flake check` runs binary smoke, YAML schema validation, override-merge correctness, closure-size guard, and a NixOS VM module test.
 
 Pinned to upstream `v2026.5.16` (v0.14.0).
 
@@ -226,10 +226,11 @@ See [docs/CLIENT.md](docs/CLIENT.md). Summary: each hermes install has its own b
 
 | Check | What it verifies | Cost |
 |---|---|---|
-| `smoke` | binary runs, prints v0.14.0, all 3 entry points exist | ~2 min cold, free warm |
+| `smoke` | binary runs, all 3 entry points exist, version matches upstream `pyproject.toml` | ~2 min cold, free warm |
 | `smoke-full` | full variant builds | ~5 min cold |
 | `config-yaml-schema` | rendered YAML has `discord:` at top-level, `platforms.{api_server,webhook,telegram}` registered | ~1s |
 | `config-yaml-override` | `settings = { agent.max_turns = 120; }` overrides apply correctly | ~1s |
+| `closure-size` | base closure stays under 1500 MB (current ~280 MB) | ~5s |
 | `nixos-module` | NixOS VM boots with module, asserts UID 10000, env vars exported, hardening directives present, bot-token bridge in ExecStart | ~5 min |
 
 Run them locally:
@@ -245,7 +246,9 @@ CI runs all of them on `x86_64-linux` + `aarch64-linux`. VM test is `x86_64-linu
 - [docs/WEBHOOK_ROUTES.md](docs/WEBHOOK_ROUTES.md) — webhook routes + per-route HMAC pattern
 - [docs/SOPS.md](docs/SOPS.md) — sops-nix integration recipe
 - [docs/ISOLATION.md](docs/ISOLATION.md) — bare-metal vs container vs VM trade-offs
-- [docs/CLIENT.md](docs/CLIENT.md) — laptop client patterns (A/B/C/D)
-- [docs/UPSTREAM_PR.md](docs/UPSTREAM_PR.md) — plan for contributing back to NousResearch
+- [docs/CLIENT.md](docs/CLIENT.md) — client patterns (local CLI / delegated CLI / web / messaging / ACP)
+- [docs/MIGRATION.md](docs/MIGRATION.md) — Docker → NixOS migration
+- [docs/STATE.md](docs/STATE.md) — what persists in `dataDir`, backup procedure
+- [docs/RELEASING.md](docs/RELEASING.md) — maintainer release flow
 - [example/configuration.nix](example/configuration.nix) — bare-metal NixOS host config
 - [example/container.nix](example/container.nix) — nixos-container variant

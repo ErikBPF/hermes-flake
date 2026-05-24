@@ -3,6 +3,7 @@ name: build
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -47,23 +48,12 @@ jobs:
       - name: build hermes-agent (base)
         run: nix build .#hermes-agent --print-build-logs
 
-      - name: build hermes-agent-voice (best-effort)
-        continue-on-error: true
-        run: nix build .#hermes-agent-voice --print-build-logs
+      - name: build with extras = [voice, anthropic, mcp]
+        run: |
+          nix build --impure --print-build-logs --expr \
+            '(builtins.getFlake (toString ./.)).packages.${{ matrix.system }}.hermes-agent.withExtras [ "voice" "anthropic" "mcp" ]'
 
-      - name: build hermes-agent-messaging (best-effort)
-        continue-on-error: true
-        run: nix build .#hermes-agent-messaging --print-build-logs
-
-      - name: build hermes-agent-web (best-effort)
-        continue-on-error: true
-        run: nix build .#hermes-agent-web --print-build-logs
-
-      - name: build hermes-agent-mcp (best-effort)
-        continue-on-error: true
-        run: nix build .#hermes-agent-mcp --print-build-logs
-
-      - name: full variant (best-effort — DingTalk + Feishu may fail)
+      - name: build hermes-agent-full (best-effort — DingTalk + Feishu may fail)
         continue-on-error: true
         run: nix build .#checks.${{ matrix.system }}.smoke-full --print-build-logs
 
