@@ -1,5 +1,11 @@
 # hermes-flake
 
+[![build](https://github.com/ErikBPF/hermes-flake/actions/workflows/build.yml/badge.svg)](https://github.com/ErikBPF/hermes-flake/actions/workflows/build.yml)
+[![upstream](https://img.shields.io/github/v/release/NousResearch/hermes-agent?label=hermes-agent&color=blue)](https://github.com/NousResearch/hermes-agent/releases)
+[![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![NixOS](https://img.shields.io/badge/NixOS-unstable-blue?logo=nixos)](https://nixos.org)
+
+
 Nix flake packaging [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) for NixOS — declarative install, system service, optional container isolation.
 
 Vendor-neutral defaults. Configure model backend, secrets, and platform behavior via module options. Ships:
@@ -59,72 +65,22 @@ Full example at [`example/configuration.nix`](example/configuration.nix).
 
 ## Module options
 
-Each option maps to an upstream env var or `config.yaml` field. See [`docs/ENV_VARS.md`](docs/ENV_VARS.md) for the full upstream-truth-table.
+Reference: **[`docs/ENV_VARS.md`](docs/ENV_VARS.md)** has the canonical truth-table of every option, its default, and which env var or `config.yaml` field it maps to. Inline `nix repl` introspection works too:
 
-### Core
+    nix repl
+    > :lf .
+    > nixosModules.default { config = {}; lib = (import <nixpkgs> {}).lib; pkgs = (import <nixpkgs> {}); }.options.services.hermes-agent
 
-| Option | Default | Purpose / Maps to |
-|---|---|---|
-| `enable` | false | Toggle the service |
-| `package` | `flake.packages.hermes-agent` | Variant to run |
-| `user` / `group` | `hermes` / `hermes` (UID/GID 10000) | Run identity — UID matches migrated Docker volumes |
-| `dataDir` | `/var/lib/hermes-agent` | `HERMES_HOME` — persistent state (btrfs subvolume if FS supports it) |
-| `environmentFile` | `null` | sops-rendered dotenv path → systemd `EnvironmentFile=` |
-| `configFile` | `null` (uses generated) | `HERMES_CONFIG_FILE` |
-| `settings` | `{}` | Nix attrset → `config.yaml`, merged into default |
-| `soulFile` | `null` (uses bundled) | `HERMES_SOUL_FILE` |
-| `profile` | `null` | `HERMES_PROFILE` — multi-profile selector |
+High-level groups:
 
-### API server (port 8642 default)
-
-| Option | Default | Env var |
-|---|---|---|
-| `openBindAddress` | `0.0.0.0` | `API_SERVER_HOST` |
-| `apiPort` | `8642` | `API_SERVER_PORT` |
-| `apiServerCorsOrigins` | `[]` | `API_SERVER_CORS_ORIGINS` (comma-joined) |
-| `apiServerModelName` | `""` | `API_SERVER_MODEL_NAME` |
-| `maxIterations` | `90` | `HERMES_MAX_ITERATIONS` |
-| (env-only) | — | `API_SERVER_KEY` — set via sops EnvironmentFile |
-
-### Webhook gateway (port 8644 default)
-
-| Option | Default | Env var |
-|---|---|---|
-| `webhookPort` | `8644` | `WEBHOOK_PORT` |
-| (env-only) | — | `WEBHOOK_SECRET` — set via sops EnvironmentFile (global HMAC fallback) |
-
-Per-route HMAC secrets must be referenced via `WEBHOOK_<ROUTE>_SECRET` env vars and declared in `services.hermes-agent.settings.platforms.webhook.extra.routes.<name>.hmac_secret_env`. See [`docs/WEBHOOK_ROUTES.md`](docs/WEBHOOK_ROUTES.md).
-
-### Telegram
-
-| Option | Default | Env var |
-|---|---|---|
-| `telegramAllowedUsers` | `[]` | `TELEGRAM_ALLOWED_USERS` |
-| `telegramAllowedChats` | `[]` | `TELEGRAM_ALLOWED_CHATS` |
-| `telegramAllowedTopics` | `[]` | `TELEGRAM_ALLOWED_TOPICS` |
-| (env-only via sops) | — | `HERMES_TELEGRAM_BOT_TOKEN` (bridged to `TELEGRAM_BOT_TOKEN`) |
-
-### Dashboard (port 9119, off by default)
-
-| Option | Default | Env var |
-|---|---|---|
-| `enableDashboard` | `false` | `HERMES_DASHBOARD=1` |
-| `dashboardHost` | `127.0.0.1` | `HERMES_DASHBOARD_HOST` |
-| `dashboardPort` | `9119` | `HERMES_DASHBOARD_PORT` |
-
-### Model backend
-
-| Option | Default | Env var |
-|---|---|---|
-| `openaiBaseUrl` | `https://api.openai.com/v1` | `OPENAI_BASE_URL` |
-
-### systemd hardening
-
-| Option | Default | Purpose |
-|---|---|---|
-| `memoryMax` | `2G` | `MemoryMax=` |
-| `cpuQuota` | `200%` | `CPUQuota=` |
-| `openFirewall` | `false` | Open `apiPort` + `webhookPort` |
+- **Core**: `enable`, `package`, `user`/`group`, `dataDir`, `environmentFile`, `configFile`, `settings`, `soulFile`, `profile`
+- **API server (port 8642)**: `openBindAddress`, `apiPort`, `apiServerCorsOrigins`, `apiServerModelName`, `maxIterations`
+- **Webhook gateway (port 8644)**: `webhookPort` + per-route HMAC secrets via `settings.platforms.webhook.extra.routes` (see [`docs/WEBHOOK_ROUTES.md`](docs/WEBHOOK_ROUTES.md))
+- **Telegram**: `telegramAllowedUsers`, `telegramAllowedChats`, `telegramAllowedTopics`
+- **Dashboard (port 9119, off)**: `enableDashboard`, `dashboardHost`, `dashboardPort`
+- **Model backend**: `openaiBaseUrl`
+- **systemd hardening**: `memoryMax`, `cpuQuota`, `openFirewall`, `extraServiceDeps`
+- **Healthcheck**: `enableHealthcheck`, `healthcheckInterval`
 
 ## sops-nix integration
 

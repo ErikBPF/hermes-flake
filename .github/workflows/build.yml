@@ -41,10 +41,29 @@ jobs:
       - name: config-yaml-override
         run: nix build .#checks.${{ matrix.system }}.config-yaml-override --print-build-logs
 
+      - name: closure-size guard
+        run: nix build .#checks.${{ matrix.system }}.closure-size --print-build-logs
+
       - name: build hermes-agent (base)
         run: nix build .#hermes-agent --print-build-logs
 
-      - name: full variant (best-effort)
+      - name: build hermes-agent-voice (best-effort)
+        continue-on-error: true
+        run: nix build .#hermes-agent-voice --print-build-logs
+
+      - name: build hermes-agent-messaging (best-effort)
+        continue-on-error: true
+        run: nix build .#hermes-agent-messaging --print-build-logs
+
+      - name: build hermes-agent-web (best-effort)
+        continue-on-error: true
+        run: nix build .#hermes-agent-web --print-build-logs
+
+      - name: build hermes-agent-mcp (best-effort)
+        continue-on-error: true
+        run: nix build .#hermes-agent-mcp --print-build-logs
+
+      - name: full variant (best-effort — DingTalk + Feishu may fail)
         continue-on-error: true
         run: nix build .#checks.${{ matrix.system }}.smoke-full --print-build-logs
 

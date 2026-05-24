@@ -62,7 +62,16 @@
 
         packages = {
           default = hermesPackages.hermes-agent;
-          inherit (hermesPackages) hermes-agent hermes-agent-full;
+          inherit
+            (hermesPackages)
+            hermes-agent
+            hermes-agent-voice
+            hermes-agent-messaging
+            hermes-agent-web
+            hermes-agent-mcp
+            hermes-agent-bedrock
+            hermes-agent-full
+            ;
         };
 
         apps = {
@@ -121,10 +130,18 @@
 
         homeManagerModules.hermes-agent = self.homeManagerModules.default;
 
-        # Overlay — `pkgs.hermes-agent` for downstream consumers.
+        # Overlay — `pkgs.hermes-agent` (and variants) for downstream consumers.
         overlays.default = final: prev: {
-          hermes-agent = self.packages.${prev.system}.hermes-agent;
-          hermes-agent-full = self.packages.${prev.system}.hermes-agent-full;
+          inherit
+            (self.packages.${prev.system})
+            hermes-agent
+            hermes-agent-voice
+            hermes-agent-messaging
+            hermes-agent-web
+            hermes-agent-mcp
+            hermes-agent-bedrock
+            hermes-agent-full
+            ;
         };
       };
     };

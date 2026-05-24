@@ -265,6 +265,22 @@ in {
       '';
       example = ["tailscaled.service" "sops-nix.service"];
     };
+
+    enableHealthcheck = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Run a one-shot health check service every 60s that curls
+        `/health` on the API server. Disable if you already poll the
+        endpoint from an external monitoring stack.
+      '';
+    };
+
+    healthcheckInterval = mkOption {
+      type = types.str;
+      default = "60s";
+      description = "systemd `OnUnitActiveSec` for the healthcheck timer.";
+    };
   };
 
   config = mkIf cfg.enable {
@@ -385,8 +401,8 @@ in {
       };
     };
 
-    # Optional healthcheck timer — curls /health, restarts if down for 3 ticks.
-    systemd.services.hermes-agent-healthcheck = {
+    # Optional healthcheck — curls /health every cfg.healthcheckInterval.
+    systemd.services.hermes-agent-healthcheck = mkIf cfg.enableHealthcheck {
       description = "Hermes Agent healthcheck";
       serviceConfig = {
         Type = "oneshot";
@@ -397,12 +413,12 @@ in {
       };
     };
 
-    systemd.timers.hermes-agent-healthcheck = {
+    systemd.timers.hermes-agent-healthcheck = mkIf cfg.enableHealthcheck {
       description = "Hermes Agent healthcheck timer";
       wantedBy = ["timers.target"];
       timerConfig = {
         OnBootSec = "2min";
-        OnUnitActiveSec = "60s";
+        OnUnitActiveSec = cfg.healthcheckInterval;
       };
     };
   };

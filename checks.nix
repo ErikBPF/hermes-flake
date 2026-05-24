@@ -27,6 +27,24 @@ in {
     echo "$version" > $out
   '';
 
+  # ── Closure-size guard — catches accidental dep bloat ────────────────────
+  # Base variant should stay under 1500 MB. Bump deliberately if upstream
+  # legitimately grows; the failure surface forces a review.
+  closure-size = let
+    closureInfo = pkgs.closureInfo {rootPaths = [hermes];};
+  in
+    pkgs.runCommand "hermes-closure-size" {} ''
+      bytes=$(${pkgs.coreutils}/bin/du -sb \
+                $(${pkgs.coreutils}/bin/cat ${closureInfo}/store-paths) \
+              | ${pkgs.gawk}/bin/awk '{sum+=$1} END {print sum}')
+      mb=$((bytes / 1024 / 1024))
+      echo "closure size: $mb MB" | tee $out
+      if [ "$mb" -gt 1500 ]; then
+        echo "closure exceeds 1500 MB — review for unexpected dep growth" >&2
+        exit 1
+      fi
+    '';
+
   # ── Smoke — full variant ─────────────────────────────────────────────────
   smoke-full = pkgs.runCommand "hermes-smoke-full" {} ''
     expected=$(${pkgs.gnused}/bin/sed -n 's/^version *= *"\([^"]*\)".*/\1/p' \
