@@ -26,11 +26,19 @@ pkgs.writeShellScript "hermes-bootstrap" ''
     fi
   fi
 
-  ${pkgs.coreutils}/bin/chown -R ${user}:${group} "${dataDir}"
+  # Set ownership only on the directory itself, not -R: the running service
+  # may be writing files inside (lazy-installed venv, sessions/, sqlite WAL)
+  # and a recursive chown during restart can race with open writers. Hermes
+  # creates new files under its own UID/GID anyway.
+  ${pkgs.coreutils}/bin/chown ${user}:${group} "${dataDir}"
   ${pkgs.coreutils}/bin/chmod 0750 "${dataDir}"
 
-  ${pkgs.coreutils}/bin/install -m 0640 -o ${user} -g ${group} \
+  # Install the nix-rendered config.yaml + SOUL.md ONLY when they are missing
+  # OR when their content differs from the nix-rendered version. Hermes may
+  # mutate these at runtime (auth setup, profile creation); blind overwrite
+  # on every restart would destroy that state.
+  ${pkgs.coreutils}/bin/install -C -m 0640 -o ${user} -g ${group} \
     ${configFile} "${dataDir}/config.yaml"
-  ${pkgs.coreutils}/bin/install -m 0640 -o ${user} -g ${group} \
+  ${pkgs.coreutils}/bin/install -C -m 0640 -o ${user} -g ${group} \
     ${soulFile} "${dataDir}/SOUL.md"
 ''

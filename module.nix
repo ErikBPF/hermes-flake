@@ -314,15 +314,21 @@ in {
   };
 
   config = mkIf cfg.enable {
-    assertions = [
+    assertions = let
+      # Treat IPv4 127.0.0.0/8, IPv6 ::1, and "localhost" as non-public.
+      isLoopback = addr:
+        addr == "::1"
+        || addr == "localhost"
+        || (builtins.match "^127\\.[0-9]+\\.[0-9]+\\.[0-9]+$" addr) != null;
+    in [
       {
-        # Binding non-localhost without a secret-carrying EnvironmentFile is
+        # Binding non-loopback without a secret-carrying EnvironmentFile is
         # almost always a misconfiguration — API_SERVER_KEY (bearer auth) MUST
         # be present, otherwise the API server is exposed unauthenticated.
-        assertion = cfg.openBindAddress == "127.0.0.1" || cfg.environmentFile != null;
+        assertion = isLoopback cfg.openBindAddress || cfg.environmentFile != null;
         message = ''
           services.hermes-agent.openBindAddress = "${cfg.openBindAddress}" exposes
-          the API server beyond localhost but services.hermes-agent.environmentFile
+          the API server beyond loopback but services.hermes-agent.environmentFile
           is null. Set environmentFile to a sops-rendered dotenv carrying at
           least API_SERVER_KEY.
         '';
@@ -396,13 +402,12 @@ in {
       # Bridge happens inside ExecStart wrapper below since systemd Environment=
       # cannot reference other env vars.
 
-      serviceConfig = {
-        Type = "exec";
-        User = cfg.user;
-        Group = cfg.group;
-        WorkingDirectory = cfg.dataDir;
-
-        EnvironmentFile = mkIf (cfg.environmentFile != null) cfg.environmentFile;
+      serviceConfig = lib.mkMerge [
+        {
+          Type = "exec";
+          User = cfg.user;
+          Group = cfg.group;
+          WorkingDirectory = cfg.dataDir;
 
         # Bridge HERMES_TELEGRAM_BOT_TOKEN → TELEGRAM_BOT_TOKEN (and same for
         # discord) so the same env file can be shared with a separate
@@ -436,23 +441,29 @@ in {
         ProtectHome = "read-only";
         ReadWritePaths = [cfg.dataDir];
 
-        # Resource caps — null = no cap.
-        MemoryMax = mkIf (cfg.memoryMax != null) cfg.memoryMax;
-        CPUQuota = mkIf (cfg.cpuQuota != null) cfg.cpuQuota;
-
-        # NOTE: additional systemd hardening (ProtectKernelTunables,
-        # ProtectKernelModules, ProtectControlGroups, RestrictNamespaces,
-        # LockPersonality, RestrictRealtime, RestrictSUIDSGID,
-        # SystemCallArchitectures, SystemCallFilter, etc.) is intentionally
-        # not prescribed here — host policy is the consumer's call. Apply via
-        # the standard override:
+        # Kernel-level hardening (ProtectKernelTunables, ProtectKernelModules,
+        # ProtectControlGroups, RestrictNamespaces, LockPersonality,
+        # RestrictRealtime, RestrictSUIDSGID, SystemCallArchitectures, etc.)
+        # is intentionally not prescribed here — host policy is the consumer's
+        # call. Apply via the standard override:
         #
         #   systemd.services.hermes-agent.serviceConfig = {
-        #     ProtectKernelTunables = true;
-        #     ProtectKernelModules = true;
-        #     ...
+        #     ProtectKernelTunables = true; ProtectKernelModules = true;
         #   };
-      };
+        }
+        # Use lib.optionalAttrs/mkIf-at-attrset-level so consumers can merge
+        # their own values cleanly without colliding with a structured
+        # `mkIf <cond> <value>` at the key level.
+        (lib.optionalAttrs (cfg.environmentFile != null) {
+          EnvironmentFile = cfg.environmentFile;
+        })
+        (lib.optionalAttrs (cfg.memoryMax != null) {
+          MemoryMax = cfg.memoryMax;
+        })
+        (lib.optionalAttrs (cfg.cpuQuota != null) {
+          CPUQuota = cfg.cpuQuota;
+        })
+      ];
     };
 
     # Healthcheck timer + service defined in nixos/healthcheck.nix (imported above).

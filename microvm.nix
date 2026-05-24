@@ -8,115 +8,75 @@
 }: let
   cfg = config.services.hermes-agent-microvm;
   inherit (lib) mkOption mkEnableOption mkIf types;
+  shared = import ./nixos/wrapper-options.nix {inherit lib pkgs;};
 in {
-  options.services.hermes-agent-microvm = {
-    enable = mkEnableOption "Run hermes-agent inside a microvm (KVM-isolated)";
+  options.services.hermes-agent-microvm =
+    shared.options
+    // {
+      enable = mkEnableOption "Run hermes-agent inside a microvm (KVM-isolated)";
 
-    vmName = mkOption {
-      type = types.str;
-      default = "hermes";
-      description = "microvm instance name.";
-    };
+      vmName = mkOption {
+        type = types.str;
+        default = "hermes";
+      };
 
-    hostDataDir = mkOption {
-      type = types.path;
-      default = "/var/lib/hermes-agent";
-      description = ''
-        Host path bound into the VM as /var/lib/hermes-agent (virtio-9p share).
-      '';
-    };
+      hostDataDir = mkOption {
+        type = types.path;
+        default = "/var/lib/hermes-agent";
+      };
 
-    hostSecretsPath = mkOption {
-      type = types.path;
-      default = "/run/secrets/hermes-agent";
-      description = ''
-        Host path to sops-decrypted env file. RO-shared into the VM at the
-        same path. Must be readable by the host user `microvm` so it can
-        proxy the share.
-      '';
-    };
+      hostSecretsPath = mkOption {
+        type = types.str;
+        default = "/run/secrets/hermes-agent/env";
+        description = ''
+          Host path to the sops-decrypted env FILE. Must point at a specific
+          file (not a directory) — the virtiofs share scopes to the file's
+          parent directory, so place the env file in a dedicated subdir
+          (e.g. /run/secrets/hermes-agent/env) to avoid leaking sibling
+          secrets into the guest. Asserted at build time.
 
-    memMB = mkOption {
-      type = types.int;
-      default = 2048;
-      description = "VM RAM in MiB.";
-    };
+          Type is `str` (not `path`) to prevent Nix from copying the runtime
+          file into the store at eval time.
+        '';
+      };
 
-    vcpu = mkOption {
-      type = types.int;
-      default = 2;
-      description = "VM virtual CPU count.";
-    };
+      memMB = mkOption {
+        type = types.int;
+        default = 2048;
+      };
 
-    hypervisor = mkOption {
-      type = types.enum ["qemu" "cloud-hypervisor" "firecracker" "crosvm" "kvmtool"];
-      default = "qemu";
-      description = "microvm hypervisor backend.";
-    };
+      vcpu = mkOption {
+        type = types.int;
+        default = 2;
+      };
 
-    forwardPorts = mkOption {
-      type = types.listOf types.attrs;
-      default = [];
-      description = ''
-        Host-to-guest port forwards (qemu user-mode net). Defaults to
-        forwarding `apiPort` + `webhookPort` when empty and binding is non-
-        localhost.
-      '';
-      example = lib.literalExpression ''
-        [
-          { host = 8642; guest = 8642; }
-          { host = 8644; guest = 8644; }
-        ]
-      '';
-    };
+      hypervisor = mkOption {
+        type = types.enum ["qemu" "cloud-hypervisor" "firecracker" "crosvm" "kvmtool"];
+        default = "qemu";
+      };
 
-    apiPort = mkOption {
-      type = types.port;
-      default = 8642;
-    };
+      forwardPorts = mkOption {
+        type = types.listOf types.attrs;
+        default = [];
+        description = ''
+          Only used with `hypervisor = "qemu"` (user-net forwards). Other
+          hypervisors require TAP+bridge networking — wire ports via the
+          host's bridge config instead.
+        '';
+      };
 
-    webhookPort = mkOption {
-      type = types.port;
-      default = 8644;
-    };
+      autoStart = mkOption {
+        type = types.bool;
+        default = true;
+      };
 
-    extras = mkOption {
-      type = types.listOf types.str;
-      default = [];
-      description = "Hermes extras to include inside the VM (see flake's withExtras).";
+      stateVersion = mkOption {
+        type = types.str;
+        default = "26.05";
+      };
     };
-
-    telegramAllowedUsers = mkOption {
-      type = types.listOf types.int;
-      default = [];
-    };
-
-    openaiBaseUrl = mkOption {
-      type = types.str;
-      default = "https://api.openai.com/v1";
-    };
-
-    settings = mkOption {
-      type = types.attrs;
-      default = {};
-      description = "Forwarded to inner services.hermes-agent.settings.";
-    };
-
-    extraServiceOptions = mkOption {
-      type = types.attrs;
-      default = {};
-      description = "Extra attrs spread into inner services.hermes-agent.";
-    };
-
-    stateVersion = mkOption {
-      type = types.str;
-      default = "26.05";
-    };
-  };
 
   config = mkIf cfg.enable {
-    # Asserts microvm.nix is wired by the host configuration. Consumers add:
-    #   imports = [ inputs.microvm.nixosModules.host ];
     assertions = [
       {
         assertion = config ? microvm;
@@ -130,15 +90,33 @@ in {
           https://github.com/astro/microvm.nix
         '';
       }
+      {
+        # Refuse the default `/run/secrets` parent dir — sharing the whole
+        # /run/secrets/ tree into the VM is a foot-gun. Require an explicit
+        # subdir.
+        assertion = !(builtins.elem (builtins.dirOf cfg.hostSecretsPath) ["/run/secrets" "/var/lib/secrets" "/etc/secrets"]);
+        message = ''
+          services.hermes-agent-microvm.hostSecretsPath = "${cfg.hostSecretsPath}"
+          would share the parent directory "${builtins.dirOf cfg.hostSecretsPath}"
+          into the guest — that directory typically holds OTHER services'
+          decrypted secrets and would be exposed to anything running in the
+          microvm.
+
+          Place the hermes env file in a dedicated subdirectory, e.g.
+
+              sops.secrets."hermes-agent/env" = {
+                ...
+                path = "/run/secrets/hermes-agent/env";
+              };
+              services.hermes-agent-microvm.hostSecretsPath =
+                "/run/secrets/hermes-agent/env";
+        '';
+      }
     ];
 
     microvm.vms.${cfg.vmName} = {
-      autostart = true;
-      config = {
-        config,
-        pkgs,
-        ...
-      }: {
+      autostart = cfg.autoStart;
+      config = {...}: {
         imports = [
           flakeInputs.microvm.nixosModules.microvm
           flakeSelf.nixosModules.default
@@ -156,26 +134,17 @@ in {
               mountPoint = "/var/lib/hermes-agent";
               proto = "virtiofs";
             }
-            # virtiofs can't share a single file — share the parent dir
-            # READ-ONLY so other secrets in /run/secrets/ stay inaccessible
-            # to mutation but the guest still sees them by listing the dir.
-            #
-            # For stricter isolation: put the hermes env file in its own
-            # directory (e.g. /run/secrets/hermes-agent/env) and point
-            # hostSecretsPath at that file — the share will then be scoped
-            # to /run/secrets/hermes-agent/ only.
             {
+              # Mount the parent of the secret file (virtiofs can't share a
+              # single file). The assertion above enforces this parent is a
+              # dedicated subdir, not a shared secrets root.
               tag = "hermes-secrets";
-              source = toString (builtins.dirOf cfg.hostSecretsPath);
+              source = builtins.dirOf cfg.hostSecretsPath;
               mountPoint = builtins.dirOf cfg.hostSecretsPath;
               proto = "virtiofs";
-              # Note: microvm.nix doesn't expose a read-only flag on virtiofs
-              # shares directly; the guest sees the dir RW. Use a tightly-
-              # scoped parent dir per the comment above.
             }
           ];
 
-          # qemu user-net forwards; switch to TAP+bridge for full networking.
           interfaces = lib.mkIf (cfg.hypervisor == "qemu") [
             {
               type = "user";
@@ -184,7 +153,8 @@ in {
             }
           ];
 
-          forwardPorts =
+          # forwardPorts is qemu-user-net specific. Skip for other hypervisors.
+          forwardPorts = mkIf (cfg.hypervisor == "qemu") (
             if cfg.forwardPorts == []
             then [
               {
@@ -198,26 +168,20 @@ in {
                 proto = "tcp";
               }
             ]
-            else cfg.forwardPorts;
+            else cfg.forwardPorts
+          );
         };
 
         networking.firewall.allowedTCPPorts = [cfg.apiPort cfg.webhookPort];
         networking.hostName = cfg.vmName;
 
         services.hermes-agent =
-          {
-            enable = true;
-            extras = cfg.extras;
+          (shared.toInner cfg)
+          // {
             environmentFile = cfg.hostSecretsPath;
-            openBindAddress = "0.0.0.0"; # inside the VM, bind everywhere
-            apiPort = cfg.apiPort;
-            webhookPort = cfg.webhookPort;
-            telegramAllowedUsers = cfg.telegramAllowedUsers;
-            openaiBaseUrl = cfg.openaiBaseUrl;
-            settings = cfg.settings;
+            openBindAddress = "0.0.0.0"; # inside the VM, bind every NIC
             openFirewall = true;
-          }
-          // cfg.extraServiceOptions;
+          };
 
         system.stateVersion = cfg.stateVersion;
       };

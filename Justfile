@@ -14,8 +14,12 @@ build-full:
 
 # Build with specific extras (e.g. just build-extras "voice anthropic mcp")
 build-extras EXTRAS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    extras=$(printf '"%s" ' {{EXTRAS}})
+    system=$(nix eval --raw --impure --expr 'builtins.currentSystem')
     nix build --impure --print-build-logs --expr \
-      '(builtins.getFlake (toString ./.)).packages.${builtins.currentSystem}.hermes-agent.withExtras [ {{replace(EXTRAS, " ", "\" \"")}} ]'
+      "(builtins.getFlake (toString ./.)).packages.\"$system\".hermes-agent.withExtras [ $extras ]"
 
 # Run nix flake check (eval + critical checks, no heavy VM test)
 check:
@@ -27,7 +31,9 @@ check-full:
 
 # Run the VM module test (slow — needs KVM)
 check-vm:
-    nix build .#checks.${builtins.currentSystem}.nixos-module --print-build-logs
+    #!/usr/bin/env bash
+    system=$(nix eval --raw --impure --expr 'builtins.currentSystem')
+    nix build ".#checks.${system}.nixos-module" --print-build-logs
 
 # Print the list of upstream-declared extras
 extras:
