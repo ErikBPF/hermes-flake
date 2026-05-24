@@ -317,7 +317,8 @@ in {
     assertions = let
       # Treat IPv4 127.0.0.0/8, IPv6 ::1, and "localhost" as non-public.
       isLoopback = addr:
-        addr == "::1"
+        addr
+        == "::1"
         || addr == "localhost"
         || (builtins.match "^127\\.[0-9]+\\.[0-9]+\\.[0-9]+$" addr) != null;
     in [
@@ -409,47 +410,47 @@ in {
           Group = cfg.group;
           WorkingDirectory = cfg.dataDir;
 
-        # Bridge HERMES_TELEGRAM_BOT_TOKEN → TELEGRAM_BOT_TOKEN (and same for
-        # discord) so the same env file can be shared with a separate
-        # notification stack that already claims the bare names.
-        ExecStart = pkgs.writeShellScript "hermes-exec" ''
-          # Bridge prefixed secrets to upstream-expected names so the same env
-          # file can be shared with other services (notification stacks etc.)
-          # that already claim the bare TELEGRAM_BOT_TOKEN name.
-          if [ -n "''${HERMES_TELEGRAM_BOT_TOKEN:-}" ]; then
-            export TELEGRAM_BOT_TOKEN="$HERMES_TELEGRAM_BOT_TOKEN"
-          fi
-          if [ -n "''${HERMES_DISCORD_BOT_TOKEN:-}" ]; then
-            export DISCORD_BOT_TOKEN="$HERMES_DISCORD_BOT_TOKEN"
-          fi
-          exec ${cfg.package}/bin/hermes gateway run --replace -v
-        '';
+          # Bridge HERMES_TELEGRAM_BOT_TOKEN → TELEGRAM_BOT_TOKEN (and same for
+          # discord) so the same env file can be shared with a separate
+          # notification stack that already claims the bare names.
+          ExecStart = pkgs.writeShellScript "hermes-exec" ''
+            # Bridge prefixed secrets to upstream-expected names so the same env
+            # file can be shared with other services (notification stacks etc.)
+            # that already claim the bare TELEGRAM_BOT_TOKEN name.
+            if [ -n "''${HERMES_TELEGRAM_BOT_TOKEN:-}" ]; then
+              export TELEGRAM_BOT_TOKEN="$HERMES_TELEGRAM_BOT_TOKEN"
+            fi
+            if [ -n "''${HERMES_DISCORD_BOT_TOKEN:-}" ]; then
+              export DISCORD_BOT_TOKEN="$HERMES_DISCORD_BOT_TOKEN"
+            fi
+            exec ${cfg.package}/bin/hermes gateway run --replace -v
+          '';
 
-        ExecStartPre = "+${bootstrapScript}";
+          ExecStartPre = "+${bootstrapScript}";
 
-        Restart = "always";
-        RestartSec = "10";
+          Restart = "always";
+          RestartSec = "10";
 
-        # Baseline process safety required for the service to work correctly
-        # with HERMES_HOME pointing at dataDir + lazy-installed deps.
-        # ProtectSystem=strict + ProtectHome=read-only + ReadWritePaths=
-        # [dataDir] is the minimum that allows the lazy-install behavior
-        # while keeping the rest of the filesystem off-limits.
-        NoNewPrivileges = true;
-        PrivateTmp = true;
-        ProtectSystem = "strict";
-        ProtectHome = "read-only";
-        ReadWritePaths = [cfg.dataDir];
+          # Baseline process safety required for the service to work correctly
+          # with HERMES_HOME pointing at dataDir + lazy-installed deps.
+          # ProtectSystem=strict + ProtectHome=read-only + ReadWritePaths=
+          # [dataDir] is the minimum that allows the lazy-install behavior
+          # while keeping the rest of the filesystem off-limits.
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectSystem = "strict";
+          ProtectHome = "read-only";
+          ReadWritePaths = [cfg.dataDir];
 
-        # Kernel-level hardening (ProtectKernelTunables, ProtectKernelModules,
-        # ProtectControlGroups, RestrictNamespaces, LockPersonality,
-        # RestrictRealtime, RestrictSUIDSGID, SystemCallArchitectures, etc.)
-        # is intentionally not prescribed here — host policy is the consumer's
-        # call. Apply via the standard override:
-        #
-        #   systemd.services.hermes-agent.serviceConfig = {
-        #     ProtectKernelTunables = true; ProtectKernelModules = true;
-        #   };
+          # Kernel-level hardening (ProtectKernelTunables, ProtectKernelModules,
+          # ProtectControlGroups, RestrictNamespaces, LockPersonality,
+          # RestrictRealtime, RestrictSUIDSGID, SystemCallArchitectures, etc.)
+          # is intentionally not prescribed here — host policy is the consumer's
+          # call. Apply via the standard override:
+          #
+          #   systemd.services.hermes-agent.serviceConfig = {
+          #     ProtectKernelTunables = true; ProtectKernelModules = true;
+          #   };
         }
         # Use lib.optionalAttrs/mkIf-at-attrset-level so consumers can merge
         # their own values cleanly without colliding with a structured

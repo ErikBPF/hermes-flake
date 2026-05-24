@@ -51,39 +51,38 @@
       venv =
         pythonSet.mkVirtualEnv "hermes-agent-env"
         {hermes-agent = extras;};
-    in
-    (pkgs.runCommandLocal name {
-      meta = {
-        description =
-          "NousResearch hermes-agent"
-          + lib.optionalString (extras != []) " (extras: ${lib.concatStringsSep "," extras})";
-        homepage = "https://github.com/NousResearch/hermes-agent";
-        license = lib.licenses.mit;
-        mainProgram = "hermes";
-        platforms = lib.platforms.unix;
-      };
-      passthru = {
-        inherit venv python extras availableExtras;
-        # `pkgs.hermes-agent.withExtras [ "voice" "anthropic" ]` returns a
-        # derivation rebuilt with the listed extras. Used by the NixOS module's
-        # `extras` option.
-        withExtras = newExtras:
-          mkHermesPkg {
-            name =
-              if newExtras == []
-              then "hermes-agent"
-              else "hermes-agent-with-${lib.concatStringsSep "-" newExtras}";
-            extras = newExtras;
-          };
-      };
-    } ''
-      mkdir -p $out/bin
-      for bin in hermes hermes-agent hermes-acp; do
-        if [ -x ${venv}/bin/$bin ]; then
-          ln -s ${venv}/bin/$bin $out/bin/$bin
-        fi
-      done
-    '');
+    in (pkgs.runCommandLocal name {
+        meta = {
+          description =
+            "NousResearch hermes-agent"
+            + lib.optionalString (extras != []) " (extras: ${lib.concatStringsSep "," extras})";
+          homepage = "https://github.com/NousResearch/hermes-agent";
+          license = lib.licenses.mit;
+          mainProgram = "hermes";
+          platforms = lib.platforms.unix;
+        };
+        passthru = {
+          inherit venv python extras availableExtras;
+          # `pkgs.hermes-agent.withExtras [ "voice" "anthropic" ]` returns a
+          # derivation rebuilt with the listed extras. Used by the NixOS module's
+          # `extras` option.
+          withExtras = newExtras:
+            mkHermesPkg {
+              name =
+                if newExtras == []
+                then "hermes-agent"
+                else "hermes-agent-with-${lib.concatStringsSep "-" newExtras}";
+              extras = newExtras;
+            };
+        };
+      } ''
+        mkdir -p $out/bin
+        for bin in hermes hermes-agent hermes-acp; do
+          if [ -x ${venv}/bin/$bin ]; then
+            ln -s ${venv}/bin/$bin $out/bin/$bin
+          fi
+        done
+      '');
 in {
   # Base — no extras. Construct custom variants via .withExtras:
   #   pkgs.hermes-agent.withExtras [ "voice" "anthropic" ]
