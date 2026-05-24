@@ -1,5 +1,5 @@
 result
 result-*
 .direnv/
-.envrc
+.envrc.local
 *.log
