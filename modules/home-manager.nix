@@ -12,9 +12,24 @@ in {
 
     package = mkOption {
       type = types.package;
-      default = packages.${pkgs.system}.hermes-agent;
-      defaultText = "hermes-flake.packages.\${system}.hermes-agent";
-      description = "Which hermes-agent variant to install.";
+      default = packages.${pkgs.system}.hermes-agent.withExtras cfg.extras;
+      defaultText = "hermes-flake.packages.\${system}.hermes-agent.withExtras cfg.extras";
+      description = ''
+        Which hermes-agent build to install. Defaults to a build derived
+        from `cfg.extras` via the flake's `withExtras` passthru.
+      '';
+    };
+
+    extras = mkOption {
+      type = types.listOf types.str;
+      default = [];
+      description = ''
+        Upstream hermes-agent extras to include in the user-mode install.
+        Same semantics as the NixOS module's `extras`. Discover via:
+
+            nix eval github:ErikBPF/hermes-flake#hermes-agent.availableExtras
+      '';
+      example = ["voice" "anthropic"];
     };
 
     configDir = mkOption {

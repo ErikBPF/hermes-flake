@@ -54,9 +54,37 @@ in {
 
     package = mkOption {
       type = types.package;
-      default = flakePackages.${pkgs.system}.hermes-agent;
-      defaultText = "hermes-flake.packages.\${system}.hermes-agent";
-      description = "Hermes-agent package to run.";
+      default = flakePackages.${pkgs.system}.hermes-agent.withExtras cfg.extras;
+      defaultText = "hermes-flake.packages.\${system}.hermes-agent.withExtras cfg.extras";
+      description = ''
+        Hermes-agent package to run. By default, derived from
+        `cfg.extras` via the flake's `withExtras` passthru. Set explicitly
+        to override (e.g. to use the prebuilt `hermes-agent-full`).
+      '';
+    };
+
+    extras = mkOption {
+      type = types.listOf types.str;
+      default = [];
+      description = ''
+        Upstream hermes-agent extras to include. The package is rebuilt
+        with the listed optional dep groups. Unknown extra names error
+        at eval time. Inspect available names via:
+
+            nix eval .#hermes-agent.availableExtras
+
+        Common picks:
+        - `voice`        — STT (faster-whisper) + audio (sounddevice)
+        - `anthropic`    — direct Anthropic SDK
+        - `mcp`          — Model Context Protocol support
+        - `web`          — FastAPI + uvicorn
+        - `bedrock`      — AWS Bedrock provider
+        - `exa` / `firecrawl` / `parallel-web` / `tavily` — search backends
+
+        Some extras (dingtalk, feishu, matrix) pull sdist-only packages
+        that may need additions to `overrides.nix` before they build.
+      '';
+      example = ["voice" "anthropic" "mcp"];
     };
 
     user = mkOption {

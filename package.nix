@@ -4,13 +4,7 @@
   inputs,
   system,
 }: let
-  # Source pin: github tag rather than PyPI sdist.
-  # Why: uv2nix consumes the uv.lock from the source tree to derive the dep
-  # graph. PyPI sdists historically omit uv.lock (it's a dev-time artifact).
-  # The github tag at v2026.5.16 contains the same code that PyPI ships PLUS
-  # uv.lock, so reproducibility is equivalent and we get the lockfile for free.
   hermesSrc = inputs.hermes-agent-src;
-
   python = pkgs.python313;
 
   workspace = inputs.uv2nix.lib.workspace.loadWorkspace {
@@ -35,26 +29,52 @@
       ]
     );
 
-  mkHermesVenv = depGroups:
-    pythonSet.mkVirtualEnv "hermes-agent-env" depGroups;
+  # uv2nix exposes the list of declared extras (PEP 621
+  # [project.optional-dependencies]) at workspace.deps.optionals.<pkg-name>.
+  # Hermes is a single-package workspace, so all extras live under "hermes-agent".
+  availableExtras =
+    workspace.deps.optionals.hermes-agent or [];
 
   mkHermesPkg = {
     name,
-    depGroups,
+    extras ? [],
   }: let
-    venv = mkHermesVenv depGroups;
+    unknown = lib.subtractLists availableExtras extras;
   in
-    pkgs.runCommandLocal name {
+    if unknown != []
+    then
+      throw ''
+        hermes-flake: unknown extra(s): ${lib.concatStringsSep ", " unknown}
+        Available: ${lib.concatStringsSep ", " availableExtras}
+      ''
+    else let
+      venv =
+        pythonSet.mkVirtualEnv "hermes-agent-env"
+        {hermes-agent = extras;};
+    in
+    (pkgs.runCommandLocal name {
       meta = {
-        description = "NousResearch hermes-agent (${name})";
+        description =
+          "NousResearch hermes-agent"
+          + lib.optionalString (extras != []) " (extras: ${lib.concatStringsSep "," extras})";
         homepage = "https://github.com/NousResearch/hermes-agent";
         license = lib.licenses.mit;
         mainProgram = "hermes";
         platforms = lib.platforms.unix;
       };
       passthru = {
-        inherit venv python;
-        inherit (workspace) deps;
+        inherit venv python extras availableExtras;
+        # `pkgs.hermes-agent.withExtras [ "voice" "anthropic" ]` returns a
+        # derivation rebuilt with the listed extras. Used by the NixOS module's
+        # `extras` option.
+        withExtras = newExtras:
+          mkHermesPkg {
+            name =
+              if newExtras == []
+              then "hermes-agent"
+              else "hermes-agent-with-${lib.concatStringsSep "-" newExtras}";
+            extras = newExtras;
+          };
       };
     } ''
       mkdir -p $out/bin
@@ -63,55 +83,19 @@
           ln -s ${venv}/bin/$bin $out/bin/$bin
         fi
       done
-    '';
-  # Targeted optionals — pick a curated subset to avoid pulling Alibaba /
-  # Feishu Chinese-platform SDKs that fail to build cleanly under uv2nix.
-  optionals = workspace.deps.optionals or {};
-  pick = names: lib.foldl' (acc: n: acc // (optionals.${n} or {})) {} names;
+    '');
 in {
-  # Base — no optional extras.
+  # Base — no extras. Construct custom variants via .withExtras:
+  #   pkgs.hermes-agent.withExtras [ "voice" "anthropic" ]
   hermes-agent = mkHermesPkg {
     name = "hermes-agent";
-    depGroups = workspace.deps.default;
+    extras = [];
   };
 
-  # Voice — STT (faster-whisper) + audio (sounddevice).
-  hermes-agent-voice = mkHermesPkg {
-    name = "hermes-agent-voice";
-    depGroups = workspace.deps.default // pick ["voice"];
-  };
-
-  # Western messaging gateways only — Telegram, Discord, Slack, Signal,
-  # WhatsApp, Matrix. Excludes DingTalk + Feishu (transitive Alibaba SDK
-  # build issues under uv2nix; opt-in via hermes-agent-full if you need them).
-  hermes-agent-messaging = mkHermesPkg {
-    name = "hermes-agent-messaging";
-    depGroups = workspace.deps.default // pick ["messaging"];
-  };
-
-  # Web — FastAPI + uvicorn for the gateway's API server enhancements.
-  hermes-agent-web = mkHermesPkg {
-    name = "hermes-agent-web";
-    depGroups = workspace.deps.default // pick ["web"];
-  };
-
-  # MCP — Anthropic Model Context Protocol support.
-  hermes-agent-mcp = mkHermesPkg {
-    name = "hermes-agent-mcp";
-    depGroups = workspace.deps.default // pick ["mcp"];
-  };
-
-  # Bedrock — AWS Bedrock provider.
-  hermes-agent-bedrock = mkHermesPkg {
-    name = "hermes-agent-bedrock";
-    depGroups = workspace.deps.default // pick ["bedrock"];
-  };
-
-  # All extras (including DingTalk + Feishu). May fail to build until upstream
-  # Alibaba SDK sdist build issues are resolved or overridden in overrides.nix.
-  # Most users want one of the targeted variants above instead.
+  # Every declared extra. Build may fail on sdist-only packages that
+  # forget setuptools in build-system.requires — see overrides.nix.
   hermes-agent-full = mkHermesPkg {
     name = "hermes-agent-full";
-    depGroups = workspace.deps.all;
+    extras = availableExtras;
   };
 }

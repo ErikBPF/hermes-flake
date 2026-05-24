@@ -10,13 +10,33 @@ Nix flake packaging [NousResearch/hermes-agent](https://github.com/NousResearch/
 
 Vendor-neutral defaults. Configure model backend, secrets, and platform behavior via module options. Ships:
 
-- `packages.<system>.hermes-agent` — hermes 0.14.0 (3 CLIs: `hermes`, `hermes-acp`, `hermes-agent`).
-- `packages.<system>.hermes-agent-full` — same with all upstream extras (voice, messaging, web, mcp, …).
+- `packages.<system>.hermes-agent` — hermes 0.14.0 base (3 CLIs: `hermes`, `hermes-acp`, `hermes-agent`). Pick extras via `pkgs.hermes-agent.withExtras [ ... ]` or `services.hermes-agent.extras = [ ... ]`.
+- `packages.<system>.hermes-agent-full` — every declared extra (may fail until upstream sdist build issues are patched).
 - `nixosModules.default` — system service with sops-nix `EnvironmentFile`, btrfs subvolume bootstrap, hardening, healthcheck.
 - `homeManagerModules.default` — per-user install for desktops.
 - `checks.<system>.{smoke,module-eval}` — `nix flake check` covers binary + module validity.
 
 Pinned to upstream `v2026.5.16` (v0.14.0).
+
+## Picking extras
+
+The flake ships a single `hermes-agent` package + a `withExtras` passthru that rebuilds the venv with chosen upstream extras included.
+
+    # Inspect what's available
+    nix eval github:ErikBPF/hermes-flake#hermes-agent.availableExtras
+
+    # Build with specific extras
+    nix build --impure --expr '(builtins.getFlake "github:ErikBPF/hermes-flake").packages.x86_64-linux.hermes-agent.withExtras [ "voice" "anthropic" "mcp" ]'
+
+Available (currently): `acp`, `all`, `anthropic`, `bedrock`, `cli`, `computer-use`, `daytona`, `dev`, `dingtalk`, `edge-tts`, `exa`, `fal`, `feishu`, `firecrawl`, `google`, `hindsight`, `homeassistant`, `honcho`, `matrix`, `mcp`, `messaging`, `modal`, `parallel-web`, `pty`, `slack`, `sms`, `termux`, `termux-all`, `tts-premium`, `vercel`, `voice`, `web`, `youtube`.
+
+In the modules:
+
+    services.hermes-agent.extras = [ "voice" "anthropic" "mcp" ];
+    # or for home-manager
+    programs.hermes-agent.extras = [ "voice" ];
+
+Unknown extras error at eval time. Some sdist-only extras (`dingtalk`, `feishu`, `matrix`) need `overrides.nix` entries — already patched for the Alibaba SDK chain pulled by `dingtalk`; add more as discovered.
 
 ## Quick run
 
