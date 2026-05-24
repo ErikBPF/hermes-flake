@@ -217,7 +217,7 @@ Container quickstart:
       telegramAllowedUsers = [ 123456789 ];
     };
 
-Full example at [example/discovery-container.nix](example/discovery-container.nix).
+Full example at [example/container.nix](example/container.nix).
 
 ## Client setup (laptop / per-user)
 
@@ -251,4 +251,4 @@ CI runs all of them on `x86_64-linux` + `aarch64-linux`. VM test is `x86_64-linu
 - [docs/CLIENT.md](docs/CLIENT.md) — laptop client patterns (A/B/C/D)
 - [docs/UPSTREAM_PR.md](docs/UPSTREAM_PR.md) — plan for contributing back to NousResearch
 - [example/configuration.nix](example/configuration.nix) — bare-metal NixOS host config
-- [example/discovery-container.nix](example/discovery-container.nix) — nixos-container variant
+- [example/container.nix](example/container.nix) — nixos-container variant

@@ -254,6 +254,17 @@ in {
       default = false;
       description = "Open apiPort + webhookPort in nixos firewall.";
     };
+
+    extraServiceDeps = mkOption {
+      type = types.listOf types.str;
+      default = [];
+      description = ''
+        Extra systemd units to add to `Wants=` and `After=`. Useful for
+        environments where hermes must wait for site-specific services like
+        `tailscaled.service` before starting.
+      '';
+      example = ["tailscaled.service" "sops-nix.service"];
+    };
   };
 
   config = mkIf cfg.enable {
@@ -277,8 +288,8 @@ in {
     systemd.services.hermes-agent = {
       description = "Hermes Agent (NousResearch) — gateway service";
       wantedBy = ["multi-user.target"];
-      wants = ["network-online.target"];
-      after = ["network-online.target"];
+      wants = ["network-online.target"] ++ cfg.extraServiceDeps;
+      after = ["network-online.target"] ++ cfg.extraServiceDeps;
 
       environment =
         {

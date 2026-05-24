@@ -8,14 +8,18 @@
   hermesFull = self.packages.${system}.hermes-agent-full;
 in {
   # ── Smoke — base variant ─────────────────────────────────────────────────
+  # Version is asserted to match what the workspace's pyproject.toml claims —
+  # no hardcoded string, no breakage on upstream bump.
   smoke = pkgs.runCommand "hermes-smoke" {} ''
+    expected=$(${pkgs.gnused}/bin/sed -n 's/^version *= *"\([^"]*\)".*/\1/p' \
+                 ${self.inputs.hermes-agent-src}/pyproject.toml | head -1)
     version=$(${hermes}/bin/hermes --version)
-    case "$version" in
-      *"Hermes Agent v0.14.0"*) ;;
-      *) echo "unexpected version: $version" >&2; exit 1 ;;
-    esac
+    if ! echo "$version" | grep -qF "v$expected"; then
+      echo "expected v$expected in output, got:" >&2
+      echo "$version" >&2
+      exit 1
+    fi
 
-    # All three entrypoints exist
     test -x ${hermes}/bin/hermes
     test -x ${hermes}/bin/hermes-agent
     test -x ${hermes}/bin/hermes-acp
@@ -25,11 +29,14 @@ in {
 
   # ── Smoke — full variant ─────────────────────────────────────────────────
   smoke-full = pkgs.runCommand "hermes-smoke-full" {} ''
+    expected=$(${pkgs.gnused}/bin/sed -n 's/^version *= *"\([^"]*\)".*/\1/p' \
+                 ${self.inputs.hermes-agent-src}/pyproject.toml | head -1)
     version=$(${hermesFull}/bin/hermes --version)
-    case "$version" in
-      *"Hermes Agent v0.14.0"*) ;;
-      *) echo "unexpected version: $version" >&2; exit 1 ;;
-    esac
+    if ! echo "$version" | grep -qF "v$expected"; then
+      echo "expected v$expected in output, got:" >&2
+      echo "$version" >&2
+      exit 1
+    fi
     echo "$version" > $out
   '';
 
