@@ -33,6 +33,9 @@ jobs:
       - name: nix flake check (eval only — fast)
         run: nix flake check --no-build
 
+      - name: lint (alejandra/statix/deadnix)
+        run: nix build .#checks.${{ matrix.system }}.lint --print-build-logs
+
       - name: smoke (base)
         run: nix build .#checks.${{ matrix.system }}.smoke --print-build-logs
 
