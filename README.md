@@ -98,54 +98,21 @@ High-level groups:
 - **systemd**: `memoryMax`, `cpuQuota`, `openFirewall`, `extraServiceDeps`. Baseline process safety (`NoNewPrivileges`, `PrivateTmp`, `ProtectSystem=strict`, `ProtectHome=read-only`, `ReadWritePaths=[dataDir]`) is always applied. Kernel-level hardening is **not** prescribed — apply via your host's standard `systemd.services.hermes-agent.serviceConfig = {...}` override.
 - **Healthcheck**: `enableHealthcheck`, `healthcheckInterval`
 
-## sops-nix integration
+## Secrets
 
-Required env keys (filename of the secret matters less than these key names inside it — upstream hermes reads them directly):
-
-    LITELLM_API_KEY=...
-    OPENAI_API_KEY=...                       # same as LITELLM_API_KEY
-    OPENROUTER_API_KEY=...
-    API_SERVER_KEY=...                       # 48-char hex; required when binding 0.0.0.0
-    HERMES_TELEGRAM_BOT_TOKEN=...            # renamed from TELEGRAM_BOT_TOKEN
-    HERMES_DISCORD_BOT_TOKEN=...             # renamed from DISCORD_BOT_TOKEN
-    EXA_API_KEY=...
-
-The module bridges `HERMES_*_BOT_TOKEN` → upstream-expected `TELEGRAM_BOT_TOKEN` / `DISCORD_BOT_TOKEN` at process start via the `ExecStart` wrapper. The `HERMES_` prefix is recommended when your secret store also serves a notification stack (Grafana / Healthchecks / etc.) that already uses the unprefixed `TELEGRAM_BOT_TOKEN` name — the prefix prevents collision.
-
-### One-time secret seeding
-
-    # define encrypted secrets
-    sops secrets/hermes.env.sops
-    # paste keys per above, save (sops auto-encrypts)
-
-    # rebuild — secret lands at /run/secrets/hermes-agent
-    sudo nixos-rebuild switch
+Use sops-nix (or any secret store that renders to a dotenv file) to provide the runtime env. See [`docs/SOPS.md`](docs/SOPS.md) for the recipe and [`docs/ENV_VARS.md`](docs/ENV_VARS.md) for the complete key reference.
 
 ## config.yaml
 
-Built-in default is vendor-neutral: OpenRouter as the model provider, `anthropic/claude-opus-4.6` as the default model, 60-turn max, memory + wiki provider enabled, `redact_pii` on, all hardening directives applied. Override piecemeal via `services.hermes-agent.settings`:
-
-    services.hermes-agent.settings = {
-      model.default = "claude-opus-4-7";
-      agent.max_turns = 120;
-      memory.nudge_interval = 5;
-    };
-
-Or replace wholesale with a literal file:
-
-    services.hermes-agent.configFile = ./config.yaml;
-
-Runtime values for `model.api_key`, `${OPENAI_API_KEY}`, etc come from `EnvironmentFile`. The YAML retains the `${VAR}` syntax — upstream hermes interpolates at load time.
+Default config is vendor-neutral (OpenRouter, `claude-opus-4.6`, 60-turn max, wiki memory, `redact_pii` on). Override via `services.hermes-agent.settings` (deep-merges into the default) or `services.hermes-agent.configFile` (wholesale replace). See [`docs/ENV_VARS.md`](docs/ENV_VARS.md#things-that-are-not-env-vars-configyaml-only) for the YAML-only fields.
 
 ## SOUL.md
 
-Personality contract. Bundled default is a neutral placeholder — override with your own:
-
-    services.hermes-agent.soulFile = ./my-soul.md;
+Personality contract loaded fresh per message. Override with `services.hermes-agent.soulFile = ./my-soul.md;`.
 
 ## Migration from Docker
 
-If you're migrating from the upstream Docker compose deployment, see [docs/MIGRATION.md](docs/MIGRATION.md).
+See [`docs/MIGRATION.md`](docs/MIGRATION.md).
 
 ## Caveats
 

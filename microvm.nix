@@ -156,11 +156,22 @@ in {
               mountPoint = "/var/lib/hermes-agent";
               proto = "virtiofs";
             }
+            # virtiofs can't share a single file — share the parent dir
+            # READ-ONLY so other secrets in /run/secrets/ stay inaccessible
+            # to mutation but the guest still sees them by listing the dir.
+            #
+            # For stricter isolation: put the hermes env file in its own
+            # directory (e.g. /run/secrets/hermes-agent/env) and point
+            # hostSecretsPath at that file — the share will then be scoped
+            # to /run/secrets/hermes-agent/ only.
             {
               tag = "hermes-secrets";
               source = toString (builtins.dirOf cfg.hostSecretsPath);
               mountPoint = builtins.dirOf cfg.hostSecretsPath;
               proto = "virtiofs";
+              # Note: microvm.nix doesn't expose a read-only flag on virtiofs
+              # shares directly; the guest sees the dir RW. Use a tightly-
+              # scoped parent dir per the comment above.
             }
           ];
 

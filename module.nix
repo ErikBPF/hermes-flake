@@ -138,16 +138,26 @@ in {
     };
 
     settings = mkOption {
-      type = types.attrs;
+      type = (pkgs.formats.yaml {}).type;
       default = {};
       description = ''
-        Hermes config.yaml content as a Nix attrset, rendered via pkgs.formats.yaml.
-        Merges recursively with the bundled default in config.yaml.nix.
+        Hermes config.yaml content as a Nix attrset, rendered via
+        pkgs.formats.yaml. Merges recursively with the bundled default
+        in config.yaml.nix.
+
+        Type is the format's freeform YAML schema — anything serializable
+        to YAML is accepted, typos in keys produce wrong YAML (no schema
+        validation against upstream's expected fields; consult the upstream
+        config.yaml docs for the canonical key set).
       '';
       example = lib.literalExpression ''
         {
           agent.max_turns = 120;
           model.default = "claude-opus-4-7";
+          platforms.webhook.extra.routes.ci = {
+            hmac_secret_env = "WEBHOOK_CI_SECRET";
+            prompt = "CI event: {{ payload.action }}";
+          };
         }
       '';
     };
@@ -323,6 +333,21 @@ in {
   };
 
   config = mkIf cfg.enable {
+    assertions = [
+      {
+        # Binding non-localhost without a secret-carrying EnvironmentFile is
+        # almost always a misconfiguration — API_SERVER_KEY (bearer auth) MUST
+        # be present, otherwise the API server is exposed unauthenticated.
+        assertion = cfg.openBindAddress == "127.0.0.1" || cfg.environmentFile != null;
+        message = ''
+          services.hermes-agent.openBindAddress = "${cfg.openBindAddress}" exposes
+          the API server beyond localhost but services.hermes-agent.environmentFile
+          is null. Set environmentFile to a sops-rendered dotenv carrying at
+          least API_SERVER_KEY.
+        '';
+      }
+    ];
+
     users.users.${cfg.user} = {
       isSystemUser = true;
       group = cfg.group;

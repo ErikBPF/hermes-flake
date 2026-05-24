@@ -17,7 +17,9 @@
   image = pkgs.dockerTools.buildLayeredImage {
     name = "hermes-agent";
     tag = "nix";
-    contents = [hermesPkg pkgs.bash pkgs.coreutils pkgs.curl pkgs.git];
+    # Minimal base — bash + coreutils for shell entry points hermes spawns.
+    # No git/curl: hermes lazy-installs everything it needs into dataDir.
+    contents = [hermesPkg pkgs.bash pkgs.coreutils];
     config = {
       Cmd = ["${hermesPkg}/bin/hermes" "gateway" "run" "--replace" "-v"];
       Env = [
@@ -132,11 +134,12 @@ in {
           "${toString cfg.hostDataDir}:/var/lib/hermes-agent:rw"
         ];
 
+        # Default ports are 8642/8644 (>1024) — no NET_BIND_SERVICE needed.
+        # Add it explicitly if you reconfigure to a privileged port.
         extraOptions = [
           "--read-only"
           "--tmpfs=/tmp"
           "--cap-drop=ALL"
-          "--cap-add=NET_BIND_SERVICE"
           "--security-opt=no-new-privileges"
         ];
       };
