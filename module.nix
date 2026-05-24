@@ -23,32 +23,13 @@
     then cfg.soulFile
     else ./SOUL.md;
 
-  bootstrapScript = pkgs.writeShellScript "hermes-bootstrap" ''
-    set -euo pipefail
-
-    # btrfs subvolume bootstrap — idempotent
-    if [ ! -d "${cfg.dataDir}" ]; then
-      # If parent FS is btrfs, prefer subvolume for snapshot support.
-      # Falls back to plain mkdir otherwise.
-      parent=$(${pkgs.coreutils}/bin/dirname "${cfg.dataDir}")
-      fstype=$(${pkgs.util-linux}/bin/findmnt -no FSTYPE "$parent" 2>/dev/null || echo "")
-      if [ "$fstype" = "btrfs" ]; then
-        ${pkgs.btrfs-progs}/bin/btrfs subvolume create "${cfg.dataDir}"
-      else
-        ${pkgs.coreutils}/bin/mkdir -p "${cfg.dataDir}"
-      fi
-    fi
-
-    ${pkgs.coreutils}/bin/chown -R ${cfg.user}:${cfg.group} "${cfg.dataDir}"
-    ${pkgs.coreutils}/bin/chmod 0750 "${cfg.dataDir}"
-
-    # Stage config + SOUL into dataDir (mutable, so hermes can edit if needed)
-    ${pkgs.coreutils}/bin/install -m 0640 -o ${cfg.user} -g ${cfg.group} \
-      ${configFile} "${cfg.dataDir}/config.yaml"
-    ${pkgs.coreutils}/bin/install -m 0640 -o ${cfg.user} -g ${cfg.group} \
-      ${soulFile} "${cfg.dataDir}/SOUL.md"
-  '';
+  bootstrapScript = import ./nixos/bootstrap.nix {
+    inherit pkgs configFile soulFile;
+    inherit (cfg) dataDir user group;
+  };
 in {
+  imports = [./nixos/healthcheck.nix];
+
   options.services.hermes-agent = {
     enable = mkEnableOption "Hermes Agent (NousResearch) — autonomous AI agent system service";
 
@@ -474,25 +455,6 @@ in {
       };
     };
 
-    # Optional healthcheck — curls /health every cfg.healthcheckInterval.
-    systemd.services.hermes-agent-healthcheck = mkIf cfg.enableHealthcheck {
-      description = "Hermes Agent healthcheck";
-      serviceConfig = {
-        Type = "oneshot";
-        ExecStart = pkgs.writeShellScript "hermes-healthcheck" ''
-          ${pkgs.curl}/bin/curl -fsS --max-time 5 \
-            http://127.0.0.1:${toString cfg.apiPort}/health > /dev/null
-        '';
-      };
-    };
-
-    systemd.timers.hermes-agent-healthcheck = mkIf cfg.enableHealthcheck {
-      description = "Hermes Agent healthcheck timer";
-      wantedBy = ["timers.target"];
-      timerConfig = {
-        OnBootSec = "2min";
-        OnUnitActiveSec = cfg.healthcheckInterval;
-      };
-    };
+    # Healthcheck timer + service defined in nixos/healthcheck.nix (imported above).
   };
 }
