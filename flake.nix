@@ -89,6 +89,30 @@
             program = "${hermesPackages.hermes-agent}/bin/hermes-agent";
             meta.description = "Run hermes-agent runner";
           };
+
+          # nix run .#update — apply latest upstream release
+          update = {
+            type = "app";
+            program = toString (pkgs.writeShellScript "hermes-flake-update" ''
+              set -euo pipefail
+              cd "$(${pkgs.git}/bin/git rev-parse --show-toplevel 2>/dev/null \
+                    || { echo "must be run from inside the flake repo" >&2; exit 1; })"
+              exec ${pkgs.bash}/bin/bash ./scripts/update-version.sh "$@"
+            '');
+            meta.description = "Check + apply the latest upstream hermes-agent release";
+          };
+
+          # nix run .#update-check — exit 1 if upstream has a newer release
+          update-check = {
+            type = "app";
+            program = toString (pkgs.writeShellScript "hermes-flake-update-check" ''
+              set -euo pipefail
+              cd "$(${pkgs.git}/bin/git rev-parse --show-toplevel 2>/dev/null \
+                    || { echo "must be run from inside the flake repo" >&2; exit 1; })"
+              exec ${pkgs.bash}/bin/bash ./scripts/update-version.sh --check
+            '');
+            meta.description = "Exit 1 if an upstream hermes-agent release is newer than the pin";
+          };
         };
 
         checks = import ./checks.nix {
@@ -184,6 +208,27 @@
         overlays.default = final: prev: {
           inherit (self.packages.${prev.system}) hermes-agent hermes-agent-full;
         };
+
+        # Template — `nix flake new -t github:ErikBPF/hermes-flake my-config`
+        # scaffolds a minimal NixOS host wired to this flake + sops-nix.
+        templates.default = {
+          path = ./templates/default;
+          description = "Minimal NixOS host with hermes-agent + sops-nix";
+          welcomeText = ''
+            hermes-flake template scaffolded. Next steps:
+
+            1. Replace fileSystems / hardware-configuration with your real host's.
+            2. Encrypt your env file:    sops secrets/hermes.env.sops
+            3. Build:                    nix build .#nixosConfigurations.myhost.config.system.build.toplevel
+            4. Deploy:                   nixos-rebuild switch --flake .#myhost --target-host myhost
+
+            Docs:
+              - https://github.com/ErikBPF/hermes-flake/blob/main/docs/SOPS.md
+              - https://github.com/ErikBPF/hermes-flake/blob/main/docs/ENV_VARS.md
+          '';
+        };
+
+        templates.minimal = self.templates.default;
       };
     };
 }

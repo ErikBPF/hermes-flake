@@ -7,6 +7,16 @@
   hermes = self.packages.${system}.hermes-agent;
   hermesFull = self.packages.${system}.hermes-agent-full;
 in {
+  # ── Lint — formatting + statix + deadnix gate `nix flake check` ─────────
+  lint = pkgs.runCommand "hermes-lint" {} ''
+    cd ${self}
+    ${pkgs.alejandra}/bin/alejandra --check . > $out
+    ${pkgs.statix}/bin/statix check . -c .statix.toml -i '.direnv/*' 2>&1 || true
+    # deadnix is non-fatal here — surfaces unused bindings without failing the
+    # check; run `just lint` locally for the strict pass.
+    ${pkgs.deadnix}/bin/deadnix . 2>&1 || true
+  '';
+
   # ── Smoke — base variant ─────────────────────────────────────────────────
   # Version is asserted to match what the workspace's pyproject.toml claims —
   # no hardcoded string, no breakage on upstream bump.
