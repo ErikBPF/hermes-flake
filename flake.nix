@@ -1,5 +1,5 @@
 {
-  description = "Nix flake packaging NousResearch/hermes-agent with NixOS service module";
+  description = "Third-party Nix flake for NousResearch/hermes-agent — NixOS service module + container/microvm/podman wrappers + per-user home-manager module";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";

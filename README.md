@@ -5,7 +5,9 @@
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![NixOS](https://img.shields.io/badge/NixOS-unstable-blue?logo=nixos)](https://nixos.org)
 
-Nix flake packaging [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent). Vendor-neutral defaults, four isolation modes, hourly upstream tracker.
+Third-party Nix flake packaging [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) for NixOS. Vendor-neutral defaults, four isolation modes, hourly upstream tracker.
+
+> **Attribution.** `hermes-agent` is built and maintained by the [NousResearch](https://nousresearch.com) team. This repository is a community-maintained Nix wrapper — it does not modify the agent, does not represent NousResearch, and is not endorsed by them. Report bugs in the agent itself to [`NousResearch/hermes-agent`](https://github.com/NousResearch/hermes-agent/issues); report bugs in the Nix packaging or NixOS module to this repository.
 
 ## Quick start
 
@@ -119,3 +121,8 @@ Inspect interactively:
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — contributor guide
 - [`SECURITY.md`](SECURITY.md) — vuln reporting + threat model
 - [`CHANGELOG.md`](CHANGELOG.md) — release notes
+- [`NOTICE`](NOTICE) — upstream attribution
+
+## Keywords
+
+`nix`, `nix-flake`, `nixos`, `nixos-module`, `hermes-agent`, `nousresearch`, `llm`, `ai-agent`, `anthropic`, `openrouter`, `litellm`, `sops-nix`, `microvm`, `systemd-nspawn`, `podman`, `oci-container`, `uv2nix`, `pyproject-nix`

@@ -1,6 +1,16 @@
 # Contributing
 
-This flake aims to stay tracking upstream [`NousResearch/hermes-agent`](https://github.com/NousResearch/hermes-agent) as cleanly as possible while exposing a battle-tested NixOS service module. PRs welcome.
+This flake is a third-party Nix wrapper around [`NousResearch/hermes-agent`](https://github.com/NousResearch/hermes-agent) — see [`NOTICE`](NOTICE) for attribution. The goal: track upstream cleanly while exposing a NixOS-native service module + isolation wrappers. PRs welcome.
+
+## Where to report
+
+| Symptom | Where |
+|---|---|
+| Hermes-agent crashes, weird LLM behavior, prompt issues, model selection | Upstream: [`NousResearch/hermes-agent`](https://github.com/NousResearch/hermes-agent/issues) |
+| `nix build` fails / closure issues / Python dep build errors | This repo |
+| NixOS module options / systemd unit / sops integration / container isolation | This repo |
+| Hourly auto-update workflow opened a broken PR | This repo |
+| Security vuln | [`SECURITY.md`](SECURITY.md) (private security advisory) |
 
 ## How updates land
 
@@ -92,6 +102,31 @@ git push origin v0.X.Y
 
 CI will build the tagged ref; downstream users pinning to the tag get the same store paths.
 
+## Publishing a release (maintainer flow)
+
+See [`docs/RELEASING.md`](docs/RELEASING.md) — versioning model, tag flow, hotfix, rollback.
+
+After cutting a release, post in:
+
+- [NixOS Discourse → Announcements](https://discourse.nixos.org/c/announcements/8) — title `hermes-flake v0.X.Y — third-party Nix flake for NousResearch/hermes-agent`. Link the repo + the `docs/ISOLATION.md` trade-off matrix.
+- [`r/NixOS`](https://reddit.com/r/NixOS) — link post to the Discourse thread (centralize traffic).
+- NixOS Discord `#announcements`.
+- (Optional) `NousResearch/hermes-agent` discussions or issues — ask whether they want a `Nix users` line in their README.
+
+Then submit to community indexes:
+
+- [`nix-community/awesome-nix`](https://github.com/nix-community/awesome-nix) — PR adding the flake under `Modules → AI`.
+- [NixOS Wiki](https://wiki.nixos.org) — create `Hermes Agent` page with install snippets + link back to this repo's docs.
+- [FlakeHub](https://flakehub.com) — claim the flake for a stable URL + free public binary cache.
+- (Optional) [`nix-community/flake-registry`](https://github.com/nix-community/flake-registry) — PR adding `hermes-flake` shorthand.
+
+Repo settings to maintain discoverability:
+
+- **Topics** (under `About`): `nix`, `nix-flake`, `nixos`, `nixos-module`, `hermes-agent`, `nousresearch`, `llm`, `ai-agent`, `anthropic`, `sops-nix`, `microvm`, `nspawn`, `podman`, `systemd`
+- **Description**: copy of `flake.nix`'s `description`
+- **Social preview image**: 1280×640 PNG with logo + tagline (Settings → Social preview)
+- **Discussions**: enabled for Q&A
+
 ## License
 
-MIT, mirrors upstream. Contributions are accepted under the same license.
+MIT — matches upstream's MIT license. Contributions are accepted under the same license. Submitting a PR means you agree your contribution may be relicensed under any OSI-approved license that's compatible with MIT, should upstream re-license.
