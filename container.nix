@@ -90,9 +90,99 @@ in {
         type = types.str;
         default = "26.05";
       };
+
+      hostUser = mkOption {
+        type = types.str;
+        default = "hermes";
+        description = ''
+          Host-side user that owns `hostSecretsPath` and (when enabled)
+          `hostDataDir`. Must match the in-container `services.hermes-agent.user`
+          — `imports = [flakeSelf.nixosModules.default]` defaults that to
+          `"hermes"`, so override only if the container's inner config does too.
+        '';
+      };
+
+      hostGroup = mkOption {
+        type = types.str;
+        default = "hermes";
+        description = "Primary group of `hostUser`. Matches in-container group.";
+      };
+
+      hostUid = mkOption {
+        type = types.int;
+        default = 10000;
+        description = ''
+          UID for the host `hostUser`. Must equal the in-container UID so
+          bind-mounted secrets/data are readable from inside the nspawn
+          container (nspawn shares the host UID namespace by default).
+          The inner `services.hermes-agent.user` is hardcoded to UID 10000.
+        '';
+      };
+
+      hostGid = mkOption {
+        type = types.int;
+        default = 10000;
+        description = "GID for `hostGroup`. See `hostUid`.";
+      };
+
+      createHostUser = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Create the `hostUser`/`hostGroup` on the host so sops/agenix
+          secrets pointed at `hostSecretsPath` can declare
+          `owner = "${hostUser}"` and chown succeeds during activation.
+
+          Without this, `sops-install-secrets` aborts with
+          `failed to lookup user 'hermes'` because the inner user only
+          exists inside the container's `/etc/passwd`.
+
+          Set to false if you provision the user elsewhere (e.g. via a
+          separate `users.users.hermes = { … }` block); the assertion
+          below still verifies UID/GID alignment so a typo can't silently
+          break the bind mount.
+        '';
+      };
     };
 
   config = mkIf cfg.enable {
+    assertions = [
+      {
+        # If createHostUser is off but the operator declared the user
+        # elsewhere, the UIDs must still align — otherwise the host file
+        # owner is invisible to the in-container process and reads fail
+        # with EACCES once nspawn starts.
+        assertion =
+          cfg.createHostUser
+          || !(config.users.users ? ${cfg.hostUser})
+          || config.users.users.${cfg.hostUser}.uid == cfg.hostUid;
+        message = ''
+          services.hermes-agent-container: host user `${cfg.hostUser}` exists
+          but its UID does not match services.hermes-agent-container.hostUid
+          (${toString cfg.hostUid}). The nspawn container shares the host UID
+          namespace and reads `${cfg.hostSecretsPath}` as UID ${toString cfg.hostUid};
+          a mismatched host owner makes that file unreadable inside the
+          container. Either set `createHostUser = true` (preferred) or
+          align the externally declared UID.
+        '';
+      }
+    ];
+
+    users.users = mkIf cfg.createHostUser {
+      ${cfg.hostUser} = {
+        isSystemUser = true;
+        group = cfg.hostGroup;
+        uid = cfg.hostUid;
+        home = toString cfg.hostDataDir;
+        createHome = false;
+        description = "hermes-agent host-side owner (matches container UID)";
+      };
+    };
+
+    users.groups = mkIf cfg.createHostUser {
+      ${cfg.hostGroup}.gid = cfg.hostGid;
+    };
+
     containers.${cfg.containerName} = {
       autoStart = cfg.autoStart;
       privateNetwork = cfg.privateNetwork;
