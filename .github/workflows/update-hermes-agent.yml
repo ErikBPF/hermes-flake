@@ -2,8 +2,14 @@ name: Update Hermes Agent Version
 
 on:
   schedule:
-    - cron: '0 * * * *'   # hourly
+    # Every 6h — upstream releases land a few times a week at most; hourly
+    # burned ~24 no-op runs/day. workflow_dispatch covers urgent bumps.
+    - cron: '0 */6 * * *'
   workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
