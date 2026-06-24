@@ -21,7 +21,8 @@ Third-party Nix flake packaging [NousResearch/hermes-agent](https://github.com/N
 | `packages.<sys>.hermes-agent-full` | Every declared extra |
 | `nixosModules.default` | System service, bare-metal |
 | `nixosModules.hermes-agent-container` | systemd-nspawn isolation |
-| `nixosModules.hermes-agent-podman` | OCI container (podman or docker) |
+| `nixosModules.hermes-agent-podman` | OCI container, **nix-built** image (podman or docker) |
+| `nixosModules.hermes-agent-oci` | OCI container, **official upstream image** — recommended for production |
 | `nixosModules.hermes-agent-microvm` | KVM-isolated guest |
 | `homeManagerModules.default` | Per-user install |
 | `overlays.default` | `pkgs.hermes-agent` everywhere |

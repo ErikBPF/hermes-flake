@@ -197,6 +197,17 @@
             flakeSelf = self;
           };
 
+        # Official upstream Docker image via oci-containers — the
+        # upstream-adherent production path (vendor image + s6 supervision +
+        # pull-to-upgrade), with Nix layering declarative config/SOUL/sops.
+        nixosModules.hermes-agent-oci = {
+          config,
+          lib,
+          pkgs,
+          ...
+        }:
+          import ./nixos/oci.nix {inherit config lib pkgs;};
+
         homeManagerModules.default = import ./modules/home-manager.nix {
           inherit (self) packages;
         };

@@ -210,4 +210,44 @@ in {
       assert "DISCORD_BOT_TOKEN" in unit, "Discord bot token bridge missing"
     '';
   };
+
+  # ── OCI module — official-image path renders correct image + mounts ──────
+  # Eval-only (no image pull): asserts services.hermes-agent-oci produces a
+  # container pointing at the vendor image with /opt/data state + read-only
+  # config.yaml/SOUL.md overlays, per the upstream layout.
+  oci-module = let
+    sys = self.inputs.nixpkgs.lib.nixosSystem {
+      inherit system;
+      modules = [
+        self.nixosModules.hermes-agent-oci
+        {
+          boot.isContainer = true;
+          system.stateVersion = "26.05";
+          virtualisation.docker.enable = true;
+          services.hermes-agent-oci = {
+            enable = true;
+            openBindAddress = "0.0.0.0";
+            openaiBaseUrl = "https://litellm.example.com/v1";
+            environmentFile = "/run/secrets/hermes-agent";
+            telegramAllowedUsers = [123456789];
+            settings.model.default = "qwen-chat";
+          };
+        }
+      ];
+    };
+    c = sys.config.virtualisation.oci-containers.containers.hermes-agent;
+  in
+    pkgs.runCommand "hermes-oci-module" {
+      img = c.image;
+      vols = lib.concatStringsSep "\n" c.volumes;
+      home = c.environment.HERMES_HOME;
+    } ''
+      echo "image: $img"
+      echo "$img" | grep -q '^nousresearch/hermes-agent' || { echo "not the official image" >&2; exit 1; }
+      echo "$vols" | grep -qE ':/opt/data$' || { echo "missing /opt/data state mount" >&2; exit 1; }
+      echo "$vols" | grep -q '/opt/data/config.yaml:ro' || { echo "missing rendered config.yaml mount" >&2; exit 1; }
+      echo "$vols" | grep -q '/opt/data/SOUL.md:ro' || { echo "missing SOUL.md mount" >&2; exit 1; }
+      [ "$home" = "/opt/data" ] || { echo "HERMES_HOME != /opt/data (got: $home)" >&2; exit 1; }
+      echo ok > $out
+    '';
 }

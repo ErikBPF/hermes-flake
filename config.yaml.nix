@@ -14,7 +14,12 @@
       default = "anthropic/claude-opus-4.6";
       base_url = "https://openrouter.ai/api/v1";
       api_key = "\${OPENAI_API_KEY}";
-      max_context = 200000;
+      # Total context window (input+output). Upstream auto-detects from the
+      # provider's /v1/models when unset — set explicitly only when detection
+      # is wrong (local server, proxy without /v1/models). Key is
+      # `context_length` per upstream v2026.6.19 (NOT `max_context`, which is
+      # silently ignored).
+      context_length = 200000;
     };
 
     compression = {
@@ -26,8 +31,10 @@
     };
 
     memory = {
-      enabled = true;
-      provider = "wiki";
+      # Upstream v2026.6.19 keys. `enabled`/`provider` were silently-ignored
+      # leftovers — the real toggle is `memory_enabled`.
+      memory_enabled = true;
+      user_profile_enabled = true;
       nudge_interval = 10;
       flush_min_turns = 6;
     };
