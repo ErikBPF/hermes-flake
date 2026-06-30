@@ -89,5 +89,24 @@ jobs:
         with:
           name: ErikBPF/hermes-flake
           rolling: true
+          # The 0.1 lane contains stale higher revCount releases; keep
+          # wildcard consumers on current main with a higher rolling lane.
           rolling-minor: 2
           visibility: public
+
+  flakehub-verify:
+    runs-on: ubuntu-latest
+    needs: flakehub-publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: DeterminateSystems/determinate-nix-action@v3
+
+      - name: FlakeHub wildcard resolves to this commit
+        run: |
+          set -euo pipefail
+          metadata="$(nix flake metadata --refresh 'https://flakehub.com/f/ErikBPF/hermes-flake/*' --json)"
+          revision="$(printf '%s\n' "$metadata" | python3 -c 'import json,sys; print(json.load(sys.stdin)["revision"])')"
+          if [ "$revision" != "$GITHUB_SHA" ]; then
+            printf 'FlakeHub wildcard resolved %s, expected %s\n' "$revision" "$GITHUB_SHA" >&2
+            exit 1
+          fi

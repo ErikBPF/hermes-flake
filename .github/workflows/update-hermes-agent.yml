@@ -38,12 +38,14 @@ jobs:
 
       - name: Check for updates
         id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if ./scripts/update-version.sh --check; then
             echo "update_needed=false" >> "$GITHUB_OUTPUT"
           else
             current=$(sed -n 's|.*github:NousResearch/hermes-agent/\([^"]*\)".*|\1|p' flake.nix | head -1)
-            latest=$(curl -sf https://api.github.com/repos/NousResearch/hermes-agent/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+            latest=$(gh api repos/NousResearch/hermes-agent/releases/latest --jq .tag_name)
             echo "current=$current" >> "$GITHUB_OUTPUT"
             echo "latest=$latest"  >> "$GITHUB_OUTPUT"
             echo "update_needed=true" >> "$GITHUB_OUTPUT"
