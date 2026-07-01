@@ -205,9 +205,14 @@ in {
       # ReadWritePaths includes the dataDir
       assert "ReadWritePaths=/var/lib/hermes-agent" in unit, "ReadWritePaths missing dataDir"
 
-      # ExecStart wrapper contains the bot-token bridge
-      assert "TELEGRAM_BOT_TOKEN" in unit, "Telegram bot token bridge missing"
-      assert "DISCORD_BOT_TOKEN" in unit, "Discord bot token bridge missing"
+      # ExecStart points at a Nix-store wrapper; inspect the wrapper body for
+      # the bot-token bridge rather than `systemctl cat`, which only shows the
+      # path.
+      exec_start = machine.succeed("systemctl show hermes-agent --property=ExecStart --value").strip()
+      wrapper = exec_start.split("path=")[1].split(" ;")[0]
+      wrapper_body = machine.succeed(f"cat {wrapper}")
+      assert "TELEGRAM_BOT_TOKEN" in wrapper_body, "Telegram bot token bridge missing"
+      assert "DISCORD_BOT_TOKEN" in wrapper_body, "Discord bot token bridge missing"
     '';
   };
 
