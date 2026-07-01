@@ -17,16 +17,16 @@ jobs:
   check-and-update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
 
-      - uses: DeterminateSystems/nix-installer-action@v22
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
 
-      - uses: nix-community/cache-nix-action@v7
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
         with:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', 'flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
@@ -41,24 +41,43 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ./scripts/update-version.sh --check; then
-            echo "update_needed=false" >> "$GITHUB_OUTPUT"
+          set +e
+          output="$(./scripts/update-version.sh --check 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          current=$(printf '%s\n' "$output" | sed -n 's/.*Current pin: *//p' | tail -1)
+          latest=$(printf '%s\n' "$output" | sed -n 's/.*Latest upstream: *//p' | tail -1)
+          release=$(printf '%s\n' "$output" | sed -n 's/.*Release URL: *//p' | tail -1)
+          published=$(printf '%s\n' "$output" | sed -n 's/.*Published at: *//p' | tail -1)
+          notes=$(gh api "repos/NousResearch/hermes-agent/releases/tags/$latest" --jq '.body // ""' | head -c 3500)
+          {
+            echo "current=$current"
+            echo "latest=$latest"
+            echo "release=$release"
+            echo "published=$published"
+            echo "notes<<EOF"
+            printf '%s\n' "$notes"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          if [ "$status" -eq 0 ]; then
+            echo "update_needed=false"
+          elif [ "$status" -eq 1 ]; then
+            echo "update_needed=true"
           else
-            current=$(sed -n 's|.*github:NousResearch/hermes-agent/\([^"]*\)".*|\1|p' flake.nix | head -1)
-            latest=$(gh api repos/NousResearch/hermes-agent/releases/latest --jq .tag_name)
-            echo "current=$current" >> "$GITHUB_OUTPUT"
-            echo "latest=$latest"  >> "$GITHUB_OUTPUT"
-            echo "update_needed=true" >> "$GITHUB_OUTPUT"
-          fi
+            exit "$status"
+          fi >> "$GITHUB_OUTPUT"
 
       - name: Apply update
         if: steps.check.outputs.update_needed == 'true'
-        run: ./scripts/update-version.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/update-version.sh --version "${{ steps.check.outputs.latest }}"
 
       - name: Create pull request
         if: steps.check.outputs.update_needed == 'true'
         id: create-pr
-        uses: peter-evans/create-pull-request@v8
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         env:
           CURRENT: ${{ steps.check.outputs.current }}
           LATEST: ${{ steps.check.outputs.latest }}
@@ -70,6 +89,12 @@ jobs:
             ## Automated hermes-agent bump
 
             Updates the `hermes-agent-src` flake input from `${{ steps.check.outputs.current }}` to `${{ steps.check.outputs.latest }}`.
+
+            Upstream release: ${{ steps.check.outputs.release }}
+            Published: `${{ steps.check.outputs.published }}`
+
+            ### Upstream notes excerpt
+            ${{ steps.check.outputs.notes }}
 
             ### Verified
             - `nix build .#hermes-agent` succeeds locally in the workflow runner.
@@ -106,8 +131,9 @@ jobs:
             if [ "$NEEDED" = "true" ]; then
               echo "- Current: \`$CURRENT\`"
               echo "- Latest:  \`$LATEST\`"
+              echo "- Release: ${{ steps.check.outputs.release }}"
               echo
-              echo "✅ Pull request created."
+              echo "Pull request created."
             else
               current=$(sed -n 's|.*github:NousResearch/hermes-agent/\([^"]*\)".*|\1|p' flake.nix | head -1)
               echo "- Pinned at \`$current\` — already up to date."

@@ -24,11 +24,11 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - uses: DeterminateSystems/nix-installer-action@v22
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
 
-      - uses: nix-community/cache-nix-action@v7
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
         with:
           primary-key: nix-${{ matrix.system }}-${{ hashFiles('**/*.nix', 'flake.lock') }}
           restore-prefixes-first-match: nix-${{ matrix.system }}-
@@ -81,11 +81,11 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - uses: DeterminateSystems/determinate-nix-action@v3
+      - uses: DeterminateSystems/determinate-nix-action@629b284231c2a82554b724e357e47fc6020833c8 # v3
 
-      - uses: DeterminateSystems/flakehub-push@main
+      - uses: DeterminateSystems/flakehub-push@0e801cf490b3b3dcb099131a69146bc59d610d0f # main, pinned 2026-06-30
         with:
           name: ErikBPF/hermes-flake
           rolling: true
@@ -99,7 +99,7 @@ jobs:
     needs: flakehub-publish
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - uses: DeterminateSystems/determinate-nix-action@v3
+      - uses: DeterminateSystems/determinate-nix-action@629b284231c2a82554b724e357e47fc6020833c8 # v3
 
       - name: FlakeHub wildcard resolves to this commit
         run: |

@@ -18,6 +18,21 @@ Third-party Nix flake packaging [NousResearch/hermes-agent](https://github.com/N
     nix run "https://flakehub.com/f/ErikBPF/hermes-flake/*" -- --version
     nix run github:ErikBPF/hermes-flake -- --version
 
+## Update and trust modes
+
+This flake tracks upstream `NousResearch/hermes-agent` releases with an
+automated update PR. Successful main builds publish to FlakeHub.
+
+- **Rolling:** `https://flakehub.com/f/ErikBPF/hermes-flake/*` follows every
+  published main build. Fastest path.
+- **Version pin:** pin an exact FlakeHub release or git tag for reproducible
+  services. Best default for production hosts.
+- **Commit pin:** pin an exact commit and build locally when you want the
+  smallest trust surface.
+
+Using a binary cache adds trust in that cache. Building locally avoids that
+extra trust layer at the cost of slower upgrades.
+
 ## Outputs
 
 | Output | What |

@@ -11,23 +11,18 @@ permissions:
 jobs:
   tag:
     runs-on: ubuntu-latest
-    if: "${{ startsWith(github.event.head_commit.message, 'chore: bump hermes-agent to v') }}"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Extract version and push tag
-        env:
-          COMMIT_MSG: ${{ github.event.head_commit.message }}
+      - name: Extract packaged upstream version and push tag
         run: |
           set -euo pipefail
-          # Strict parse: first line must match `chore: bump hermes-agent to vX.Y.Z`
-          first_line=$(printf '%s\n' "$COMMIT_MSG" | head -n1)
-          tag=$(printf '%s\n' "$first_line" | sed -n -E 's|^chore: bump hermes-agent to (v[0-9]+\.[0-9]+\.[0-9]+)$|\1|p')
-          if [ -z "$tag" ]; then
-            echo "commit message did not match expected pattern; skipping" >&2
+          tag=$(sed -n 's|.*github:NousResearch/hermes-agent/\([^"]*\)".*|\1|p' flake.nix | head -1)
+          if ! printf '%s\n' "$tag" | grep -Eq '^v[0-9]{4}\.[0-9]+\.[0-9]+$'; then
+            echo "current hermes-agent pin is not a release tag: $tag" >&2
             exit 0
           fi
           if git rev-parse "refs/tags/$tag" >/dev/null 2>&1; then
