@@ -6,6 +6,7 @@
 }: let
   hermes = self.packages.${system}.hermes-agent;
   hermesFull = self.packages.${system}.hermes-agent-full;
+  hermesDesktop = self.packages.${system}.hermesDesktop;
 in {
   # ── Lint — formatting + statix + deadnix gate `nix flake check` ─────────
   lint = pkgs.runCommand "hermes-lint" {} ''
@@ -66,6 +67,12 @@ in {
       exit 1
     fi
     echo "$version" > $out
+  '';
+
+  # ── Smoke — desktop variant ──────────────────────────────────────────────
+  smoke-desktop = pkgs.runCommand "hermes-smoke-desktop" {} ''
+    test -x ${hermesDesktop}/bin/hermes-desktop
+    ${hermesDesktop}/bin/hermes-desktop --help 2>&1 | head -5 > $out
   '';
 
   # ── Config renderer — discord MUST be top-level, NOT platforms.discord ───

@@ -32,6 +32,11 @@
       flake = false;
     };
 
+    npm-lockfile-fix = {
+      url = "github:jeslie0/npm-lockfile-fix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Optional — only required when using nixosModules.hermes-agent-microvm.
     # Pull only when the consumer wires it; nothing forces it as a runtime dep.
     microvm = {
@@ -70,7 +75,8 @@
 
         packages = {
           default = hermesPackages.hermes-agent;
-          inherit (hermesPackages) hermes-agent hermes-agent-full;
+          inherit (hermesPackages) hermes-agent hermes-agent-full hermesDesktop;
+          desktop = hermesPackages.hermesDesktop;
         };
 
         apps = {
@@ -88,6 +94,12 @@
             type = "app";
             program = "${hermesPackages.hermes-agent}/bin/hermes-agent";
             meta.description = "Run hermes-agent runner";
+          };
+
+          desktop = {
+            type = "app";
+            program = "${hermesPackages.hermesDesktop}/bin/hermes-desktop";
+            meta.description = "Run hermes desktop GUI";
           };
 
           # nix run .#update — apply latest upstream release
@@ -217,7 +229,8 @@
         # Overlay — `pkgs.hermes-agent` (with .withExtras passthru) for
         # downstream consumers.
         overlays.default = final: prev: {
-          inherit (self.packages.${prev.system}) hermes-agent hermes-agent-full;
+          inherit (self.packages.${prev.system}) hermes-agent hermes-agent-full hermesDesktop;
+          hermes-desktop = self.packages.${prev.system}.hermesDesktop;
         };
 
         # Template — `nix flake new -t github:ErikBPF/hermes-flake my-config`
