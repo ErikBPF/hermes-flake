@@ -70,9 +70,13 @@ in {
   '';
 
   # ── Smoke — desktop variant ──────────────────────────────────────────────
+  # Presence + wiring only. Do NOT launch the app: `hermes-desktop --help`
+  # expands to `electron <app-path> --help`, so electron boots main.cjs and
+  # blocks on display init in the sandbox (no X) — hangs until timeout.
   smoke-desktop = pkgs.runCommand "hermes-smoke-desktop" {} ''
     test -x ${hermesDesktop}/bin/hermes-desktop
-    ${hermesDesktop}/bin/hermes-desktop --help 2>&1 | head -5 > $out
+    grep -q HERMES_DESKTOP_HERMES ${hermesDesktop}/bin/hermes-desktop
+    touch $out
   '';
 
   # ── Config renderer — discord MUST be top-level, NOT platforms.discord ───

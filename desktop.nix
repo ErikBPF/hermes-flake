@@ -28,11 +28,9 @@
     categories = ["Utility" "ArtificialIntelligence" "Network"];
     startupNotify = true;
   };
-in let
+
   npm = hermesNpmLib.mkNpmPassthru {
-    folder = "apps/desktop";
     attr = "desktop";
-    pname = "hermes-desktop";
   };
 
   packageJson = builtins.fromJSON (builtins.readFile (npm.src + "/apps/desktop/package.json"));
@@ -157,9 +155,9 @@ in
       # PATH") uses our fully wrapped binary — venv with all deps,
       # bundled skills/plugins, runtime PATH (ripgrep/git/ffmpeg/etc).
       # No reimplementation of the agent resolver in the wrapper.
-      makeWrapper ${electron}/bin/electron $out/bin/hermes-desktop \
+      makeWrapper ${lib.getExe electron} $out/bin/hermes-desktop \
         --add-flags "$out/share/hermes-desktop" \
-        --set HERMES_DESKTOP_HERMES "${hermesAgent}/bin/hermes" \
+        --set HERMES_DESKTOP_HERMES "${lib.getExe hermesAgent}" \
         --set ELECTRON_IS_DEV 0
 
       # Install .desktop file so GNOME and other desktop environments
@@ -173,10 +171,6 @@ in
 
       runHook postInstall
     '';
-
-    passthru = {
-      inherit (renderer.passthru) packageJsonPath;
-    };
 
     meta = with lib; {
       description = "Native Electron desktop shell for Hermes Agent";
