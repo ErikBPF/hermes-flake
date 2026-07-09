@@ -49,7 +49,7 @@ fetch_latest_release() {
 
 validate_release_tag() {
     local tag="$1"
-    if [[ ! "$tag" =~ ^v[0-9]{4}\.[0-9]+\.[0-9]+$ ]]; then
+    if [[ ! "$tag" =~ ^v[0-9]{4}\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
         log_error "Latest release tag is malformed: $tag"
         exit 2
     fi
