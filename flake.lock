@@ -23,16 +23,16 @@
     "hermes-agent-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1783473288,
-        "narHash": "sha256-Yk/BXRlNJgfeqjy8hDOT/HbKgevWTH786Df+sQ3g9MU=",
+        "lastModified": 1783480268,
+        "narHash": "sha256-RieWkLWEn21aamFvQTTnJwwQl00JJGgp3LvY3D3G3jQ=",
         "owner": "NousResearch",
         "repo": "hermes-agent",
-        "rev": "f9eca7e15f1c2bfe5194aae5aa489af53c0a1a23",
+        "rev": "9de9c25f620ff7f1ce0fd5457d596052d5159596",
         "type": "github"
       },
       "original": {
         "owner": "NousResearch",
-        "ref": "v2026.7.7",
+        "ref": "v2026.7.7.2",
         "repo": "hermes-agent",
         "type": "github"
       }
