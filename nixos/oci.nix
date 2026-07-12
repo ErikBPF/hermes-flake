@@ -16,9 +16,11 @@
   config,
   lib,
   pkgs,
+  optionName ? "hermes-agent-oci",
+  defaultContainerName ? "hermes-agent",
   ...
 }: let
-  cfg = config.services.hermes-agent-oci;
+  cfg = config.services.${optionName};
   inherit (lib) mkOption mkEnableOption mkIf types;
   shared = import ./wrapper-options.nix {inherit lib pkgs;};
 
@@ -38,7 +40,7 @@
     then cfg.soulFile
     else ../SOUL.md;
 in {
-  options.services.hermes-agent-oci =
+  options.services.${optionName} =
     shared.options
     // {
       enable = mkEnableOption "Run the official upstream hermes-agent Docker image via virtualisation.oci-containers";
@@ -67,7 +69,7 @@ in {
 
       containerName = mkOption {
         type = types.str;
-        default = "hermes-agent";
+        default = defaultContainerName;
       };
 
       hostDataDir = mkOption {
