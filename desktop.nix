@@ -27,6 +27,7 @@
     terminal = false;
     categories = ["Utility" "ArtificialIntelligence" "Network"];
     startupNotify = true;
+    startupWMClass = "hermes";
   };
 in let
   npm = hermesNpmLib.mkNpmPassthru {
