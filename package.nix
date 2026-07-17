@@ -111,8 +111,8 @@
     };
   in
     pkgs.callPackage ./desktop.nix {
+      inherit (pkgs) electron;
       inherit hermesNpmLib;
-      electron = pkgs.electron;
       hermesAgent = packages.hermes-agent;
     };
 in

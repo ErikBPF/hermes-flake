@@ -72,7 +72,12 @@ in {
   # ── Smoke — desktop variant ──────────────────────────────────────────────
   smoke-desktop = pkgs.runCommand "hermes-smoke-desktop" {} ''
     test -x ${hermesDesktop}/bin/hermes-desktop
-    ${hermesDesktop}/bin/hermes-desktop --help 2>&1 | head -5 > $out
+    test -f ${hermesDesktop}/share/hermes-desktop/dist/index.html
+    test -f ${hermesDesktop}/share/hermes-desktop/electron/main.cjs
+    grep -q "HERMES_DESKTOP_HERMES='${hermes}/bin/hermes'" \
+      ${hermesDesktop}/bin/hermes-desktop
+    grep -q "ELECTRON_IS_DEV='0'" ${hermesDesktop}/bin/hermes-desktop
+    echo ok > $out
   '';
 
   # ── Config renderer — discord MUST be top-level, NOT platforms.discord ───
@@ -135,12 +140,7 @@ in {
   nixos-module = pkgs.testers.runNixOSTest {
     name = "hermes-agent-module";
 
-    nodes.machine = {
-      config,
-      lib,
-      pkgs,
-      ...
-    }: {
+    nodes.machine = {lib, ...}: {
       imports = [self.nixosModules.default];
 
       # Provide a fake EnvironmentFile so the unit can start (we won't start it).
