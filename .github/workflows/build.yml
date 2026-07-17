@@ -47,6 +47,12 @@ jobs:
       - name: smoke (base)
         run: nix build .#checks.${{ matrix.system }}.smoke --print-build-logs
 
+      - name: build Hermes Desktop
+        run: nix build .#desktop --print-build-logs
+
+      - name: smoke (desktop)
+        run: nix build .#checks.${{ matrix.system }}.smoke-desktop --print-build-logs
+
       - name: config-yaml-schema
         run: nix build .#checks.${{ matrix.system }}.config-yaml-schema --print-build-logs
 
@@ -85,6 +91,8 @@ jobs:
             echo "- nix flake check --no-build"
             echo "- lint"
             echo "- base smoke"
+            echo "- Hermes Desktop build"
+            echo "- desktop smoke"
             echo "- config schema"
             echo "- config override"
             echo "- closure-size guard"
