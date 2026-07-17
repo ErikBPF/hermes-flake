@@ -83,18 +83,37 @@
           fi
         done
       '');
-in {
-  # Base — no extras. Construct custom variants via .withExtras:
-  #   pkgs.hermes-agent.withExtras [ "voice" "anthropic" ]
-  hermes-agent = mkHermesPkg {
-    name = "hermes-agent";
-    extras = [];
+  packages = {
+    # Base — no extras. Construct custom variants via .withExtras:
+    #   pkgs.hermes-agent.withExtras [ "voice" "anthropic" ]
+    hermes-agent = mkHermesPkg {
+      name = "hermes-agent";
+      extras = [];
+    };
+
+    # Every declared extra. Build may fail on sdist-only packages that
+    # forget setuptools in build-system.requires — see overrides.nix.
+    hermes-agent-full = mkHermesPkg {
+      name = "hermes-agent-full";
+      extras = availableExtras;
+    };
   };
 
-  # Every declared extra. Build may fail on sdist-only packages that
-  # forget setuptools in build-system.requires — see overrides.nix.
-  hermes-agent-full = mkHermesPkg {
-    name = "hermes-agent-full";
-    extras = availableExtras;
-  };
-}
+  # Desktop (Electron) app — wraps the hermes-agent CLI with a native GUI.
+  # Requires nodejs + electron at build time.
+  hermesDesktop = let
+    npm-lockfile-fix-pkg = inputs.npm-lockfile-fix.packages.${system}.default;
+    hermesNpmLib = import ./lib.nix {
+      inherit pkgs;
+      npm-lockfile-fix = npm-lockfile-fix-pkg;
+      nodejs = pkgs.nodejs_22;
+      inherit hermesSrc;
+    };
+  in
+    pkgs.callPackage ./desktop.nix {
+      inherit (pkgs) electron;
+      inherit hermesNpmLib;
+      hermesAgent = packages.hermes-agent;
+    };
+in
+  packages // {inherit hermesDesktop;}

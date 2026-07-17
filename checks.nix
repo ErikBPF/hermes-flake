@@ -6,6 +6,7 @@
 }: let
   hermes = self.packages.${system}.hermes-agent;
   hermesFull = self.packages.${system}.hermes-agent-full;
+  hermesDesktop = self.packages.${system}.hermesDesktop;
 in {
   # ── Lint — formatting + statix + deadnix gate `nix flake check` ─────────
   lint = pkgs.runCommand "hermes-lint" {} ''
@@ -68,6 +69,17 @@ in {
     echo "$version" > $out
   '';
 
+  # ── Smoke — desktop variant ──────────────────────────────────────────────
+  smoke-desktop = pkgs.runCommand "hermes-smoke-desktop" {} ''
+    test -x ${hermesDesktop}/bin/hermes-desktop
+    test -f ${hermesDesktop}/share/hermes-desktop/dist/index.html
+    test -f ${hermesDesktop}/share/hermes-desktop/electron/main.cjs
+    grep -q "HERMES_DESKTOP_HERMES='${hermes}/bin/hermes'" \
+      ${hermesDesktop}/bin/hermes-desktop
+    grep -q "ELECTRON_IS_DEV='0'" ${hermesDesktop}/bin/hermes-desktop
+    echo ok > $out
+  '';
+
   # ── Config renderer — discord MUST be top-level, NOT platforms.discord ───
   config-yaml-schema = let
     rendered = import ./config.yaml.nix {
@@ -128,12 +140,7 @@ in {
   nixos-module = pkgs.testers.runNixOSTest {
     name = "hermes-agent-module";
 
-    nodes.machine = {
-      config,
-      lib,
-      pkgs,
-      ...
-    }: {
+    nodes.machine = {lib, ...}: {
       imports = [self.nixosModules.default];
 
       # Provide a fake EnvironmentFile so the unit can start (we won't start it).
