@@ -262,4 +262,43 @@ in {
       [ "$home" = "/opt/data" ] || { echo "HERMES_HOME != /opt/data (got: $home)" >&2; exit 1; }
       echo ok > $out
     '';
+
+  # ── Role OCI modules — isolated container/state/config per agent ─────────
+  oci-role-modules = let
+    sys = self.inputs.nixpkgs.lib.nixosSystem {
+      inherit system;
+      modules = [
+        self.nixosModules.hermes-agent-oci-daedalus
+        self.nixosModules.hermes-agent-oci-argus
+        {
+          boot.isContainer = true;
+          system.stateVersion = "26.05";
+          virtualisation.docker.enable = true;
+          services.hermes-agent-oci-daedalus = {
+            enable = true;
+            hostDataDir = "/var/lib/hermes-daedalus";
+            environmentFile = "/run/secrets/hermes-daedalus";
+            settings.model.default = "glm-5";
+          };
+          services.hermes-agent-oci-argus = {
+            enable = true;
+            hostDataDir = "/var/lib/hermes-argus";
+            environmentFile = "/run/secrets/hermes-argus";
+            settings.model.default = "glm-5";
+          };
+        }
+      ];
+    };
+    daedalus = sys.config.virtualisation.oci-containers.containers.hermes-daedalus;
+    argus = sys.config.virtualisation.oci-containers.containers.hermes-argus;
+  in
+    pkgs.runCommand "hermes-oci-role-modules" {
+      daedalusVolumes = lib.concatStringsSep "\n" daedalus.volumes;
+      argusVolumes = lib.concatStringsSep "\n" argus.volumes;
+    } ''
+      echo "$daedalusVolumes" | grep -q '^/var/lib/hermes-daedalus:/opt/data$'
+      echo "$argusVolumes" | grep -q '^/var/lib/hermes-argus:/opt/data$'
+      test "$daedalusVolumes" != "$argusVolumes"
+      echo ok > $out
+    '';
 }

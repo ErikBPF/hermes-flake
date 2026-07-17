@@ -28,7 +28,7 @@
     };
 
     hermes-agent-src = {
-      url = "github:NousResearch/hermes-agent/v2026.7.1";
+      url = "github:NousResearch/hermes-agent/v2026.7.7.2";
       flake = false;
     };
 
@@ -219,6 +219,30 @@
           ...
         }:
           import ./nixos/oci.nix {inherit config lib pkgs;};
+
+        nixosModules.hermes-agent-oci-daedalus = {
+          config,
+          lib,
+          pkgs,
+          ...
+        }:
+          import ./nixos/oci.nix {
+            inherit config lib pkgs;
+            optionName = "hermes-agent-oci-daedalus";
+            defaultContainerName = "hermes-daedalus";
+          };
+
+        nixosModules.hermes-agent-oci-argus = {
+          config,
+          lib,
+          pkgs,
+          ...
+        }:
+          import ./nixos/oci.nix {
+            inherit config lib pkgs;
+            optionName = "hermes-agent-oci-argus";
+            defaultContainerName = "hermes-argus";
+          };
 
         homeManagerModules.default = import ./modules/home-manager.nix {
           inherit (self) packages;
