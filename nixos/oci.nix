@@ -39,6 +39,9 @@
     if cfg.soulFile != null
     then cfg.soulFile
     else ../SOUL.md;
+
+  healthcheckUnit = "${cfg.containerName}-healthcheck";
+  containerUnit = "${cfg.backend}-${cfg.containerName}.service";
 in {
   options.services.${optionName} =
     shared.options
@@ -229,8 +232,35 @@ in {
 
     # /opt/data is owned by UID/GID 10000 inside the image (entrypoint drops to
     # it via gosu). Pre-create the host dir with the matching owner.
-    systemd.tmpfiles.rules = [
-      "d ${toString cfg.hostDataDir} 0750 10000 10000 -"
-    ];
+    systemd = {
+      tmpfiles.rules = [
+        "d ${toString cfg.hostDataDir} 0750 10000 10000 -"
+      ];
+
+      services.${healthcheckUnit} = lib.mkIf cfg.enableHealthcheck {
+        description = "Hermes Agent OCI healthcheck";
+        after = [containerUnit];
+        requisite = [containerUnit];
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = let
+            probeHost = shared.probeHostFor cfg.openBindAddress;
+          in
+            pkgs.writeShellScript "${healthcheckUnit}" ''
+              ${pkgs.curl}/bin/curl -fsS --max-time 5 --connect-timeout 3 \
+                "http://${probeHost}:${toString cfg.apiPort}/health" > /dev/null
+            '';
+        };
+      };
+
+      timers.${healthcheckUnit} = lib.mkIf cfg.enableHealthcheck {
+        description = "Hermes Agent OCI healthcheck timer";
+        wantedBy = ["timers.target"];
+        timerConfig = {
+          OnBootSec = "2min";
+          OnUnitActiveSec = cfg.healthcheckInterval;
+        };
+      };
+    };
   };
 }

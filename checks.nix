@@ -238,6 +238,7 @@ in {
           virtualisation.docker.enable = true;
           services.hermes-agent-oci = {
             enable = true;
+            enableHealthcheck = true;
             openBindAddress = "0.0.0.0";
             openaiBaseUrl = "https://litellm.example.com/v1";
             environmentFile = "/run/secrets/hermes-agent";
@@ -248,11 +249,15 @@ in {
       ];
     };
     c = sys.config.virtualisation.oci-containers.containers.hermes-agent;
+    healthService = sys.config.systemd.services.hermes-agent-healthcheck;
+    healthTimer = sys.config.systemd.timers.hermes-agent-healthcheck;
   in
     pkgs.runCommand "hermes-oci-module" {
       img = c.image;
       vols = lib.concatStringsSep "\n" c.volumes;
       home = c.environment.HERMES_HOME;
+      healthExec = healthService.serviceConfig.ExecStart;
+      healthTimerTarget = lib.concatStringsSep "\n" healthTimer.wantedBy;
     } ''
       echo "image: $img"
       echo "$img" | grep -q '^nousresearch/hermes-agent' || { echo "not the official image" >&2; exit 1; }
@@ -260,6 +265,8 @@ in {
       echo "$vols" | grep -q '/opt/data/config.yaml:ro' || { echo "missing rendered config.yaml mount" >&2; exit 1; }
       echo "$vols" | grep -q '/opt/data/SOUL.md:ro' || { echo "missing SOUL.md mount" >&2; exit 1; }
       [ "$home" = "/opt/data" ] || { echo "HERMES_HOME != /opt/data (got: $home)" >&2; exit 1; }
+      grep -q 'http://127.0.0.1:8642/health' "$healthExec" || { echo "OCI health probe URL missing" >&2; exit 1; }
+      echo "$healthTimerTarget" | grep -qx 'timers.target' || { echo "OCI health timer not enabled" >&2; exit 1; }
       echo ok > $out
     '';
 
