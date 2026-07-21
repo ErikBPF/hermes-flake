@@ -245,10 +245,22 @@ in {
           Type = "oneshot";
           ExecStart = let
             probeHost = shared.probeHostFor cfg.openBindAddress;
+            probeTarget =
+              if cfg.publishPorts
+              then probeHost
+              else "$probeHost";
+            runtime =
+              if cfg.backend == "docker"
+              then "${pkgs.docker}/bin/docker"
+              else "${pkgs.podman}/bin/podman";
           in
             pkgs.writeShellScript "${healthcheckUnit}" ''
+              ${lib.optionalString (!cfg.publishPorts) ''
+                probeHost="$(${runtime} inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${lib.escapeShellArg cfg.containerName})"
+                test -n "$probeHost"
+              ''}
               ${pkgs.curl}/bin/curl -fsS --max-time 5 --connect-timeout 3 \
-                "http://${probeHost}:${toString cfg.apiPort}/health" > /dev/null
+                "http://${probeTarget}:${toString cfg.apiPort}/health" > /dev/null
             '';
         };
       };

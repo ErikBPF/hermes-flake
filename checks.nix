@@ -239,6 +239,7 @@ in {
           services.hermes-agent-oci = {
             enable = true;
             enableHealthcheck = true;
+            publishPorts = false;
             openBindAddress = "0.0.0.0";
             openaiBaseUrl = "https://litellm.example.com/v1";
             environmentFile = "/run/secrets/hermes-agent";
@@ -265,7 +266,8 @@ in {
       echo "$vols" | grep -q '/opt/data/config.yaml:ro' || { echo "missing rendered config.yaml mount" >&2; exit 1; }
       echo "$vols" | grep -q '/opt/data/SOUL.md:ro' || { echo "missing SOUL.md mount" >&2; exit 1; }
       [ "$home" = "/opt/data" ] || { echo "HERMES_HOME != /opt/data (got: $home)" >&2; exit 1; }
-      grep -q 'http://127.0.0.1:8642/health' "$healthExec" || { echo "OCI health probe URL missing" >&2; exit 1; }
+      grep -q 'docker inspect' "$healthExec" || { echo "unpublished OCI health probe does not inspect the container" >&2; exit 1; }
+      grep -q 'http://$probeHost:8642/health' "$healthExec" || { echo "unpublished OCI health probe URL missing" >&2; exit 1; }
       echo "$healthTimerTarget" | grep -qx 'timers.target' || { echo "OCI health timer not enabled" >&2; exit 1; }
       echo ok > $out
     '';
