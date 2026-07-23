@@ -2,20 +2,5 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "github>ErikBPF/renovate-config"
-  ],
-  "packageRules": [
-    {
-      "description": "Automerge non-major github-actions once CI is green",
-      "matchManagers": [
-        "github-actions"
-      ],
-      "matchUpdateTypes": [
-        "digest",
-        "pin",
-        "patch",
-        "minor"
-      ],
-      "automerge": true
-    }
   ]
 }
