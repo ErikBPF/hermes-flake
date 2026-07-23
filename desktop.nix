@@ -61,22 +61,12 @@ in let
         patchShebangs .
 
         pushd apps/desktop
-          # stage node-pty native binaries into build/native-deps for the final nix output
           npm rebuild node-pty --build-from-source
-          node scripts/stage-native-deps.cjs
 
           npm exec tsc -b
           npm exec vite build
-
-          # simple-git is the electron main's external runtime dep.  It is not
-          # bundled into main.cjs; instead the stage-native-deps.cjs call above
-          # copies its closure to apps/desktop/build/native-deps/vendor/node_modules/,
-          # which installPhase ships into $out/native-deps/ — the same path the
-          # packaged app uses.  electron/git-review-ops.cjs resolves it from
-          # process.resourcesPath when the hoisted require() isn't reachable
-          # (see issue #52735).  node-pty's prebuilt is staged the same way;
-          # electron is provided by the runtime.  preload.cjs stays separate —
-          # Electron loads it via __dirname, not require().
+          node scripts/bundle-electron-main.mjs
+          node scripts/stage-native-deps.mjs
         popd
 
         runHook postBuild
@@ -90,7 +80,7 @@ in let
           npm run postbuild
 
           # validate staged node-pty native binary is present
-          STAGED_PTY_NODE="./build/native-deps/node-pty/build/Release/pty.node"
+          STAGED_PTY_NODE="./dist/node_modules/node-pty/build/Release/pty.node"
 
           if [ ! -f "$STAGED_PTY_NODE" ]; then
             echo "FATAL: Missing staged node-pty native binary at $STAGED_PTY_NODE"
@@ -111,10 +101,6 @@ in let
         cp -rn apps/desktop/dist $out/
         cp -rn apps/desktop/electron $out/
 
-        # flatten native-deps and install-stamp.json to the root level, exactly like
-        # electron-builder's extraResources does ("from": "build/native-deps", "to": "native-deps")
-        # so main.cjs can find it at process.resourcesPath + '/native-deps/node-pty'
-        cp -rn apps/desktop/build/native-deps $out/
         cp -n apps/desktop/build/install-stamp.json $out/
 
         cp -n apps/desktop/package.json $out/
@@ -142,14 +128,7 @@ in
       # Standard nixpkgs pattern for electron-builder apps: patch process.resourcesPath
       # to point to the app's directory. In Nix, unpackaged electron defaults this
       # to the electron distribution's resources path, breaking extraResources lookups.
-      substituteInPlace $out/share/hermes-desktop/electron/main.cjs \
-        --replace-fail "process.resourcesPath" "'$out/share/hermes-desktop'"
-
-      # git-review-ops.cjs has the same process.resourcesPath fallback for its
-      # staged simple-git dep (native-deps/vendor/node_modules/), so it needs the same
-      # rewrite — otherwise the require() fallback resolves against the electron
-      # dist's resources path and fails to load simple-git (issue #52735).
-      substituteInPlace $out/share/hermes-desktop/electron/git-review-ops.cjs \
+      substituteInPlace $out/share/hermes-desktop/dist/electron-main.mjs \
         --replace-fail "process.resourcesPath" "'$out/share/hermes-desktop'"
 
       # Wrap the nixpkgs electron binary to launch our app.  Set
