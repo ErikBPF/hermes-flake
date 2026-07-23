@@ -73,7 +73,7 @@ in {
   smoke-desktop = pkgs.runCommand "hermes-smoke-desktop" {} ''
     test -x ${hermesDesktop}/bin/hermes-desktop
     test -f ${hermesDesktop}/share/hermes-desktop/dist/index.html
-    test -f ${hermesDesktop}/share/hermes-desktop/electron/main.cjs
+    test -f ${hermesDesktop}/share/hermes-desktop/dist/electron-main.mjs
     grep -q "HERMES_DESKTOP_HERMES='${hermes}/bin/hermes'" \
       ${hermesDesktop}/bin/hermes-desktop
     grep -q "ELECTRON_IS_DEV='0'" ${hermesDesktop}/bin/hermes-desktop
