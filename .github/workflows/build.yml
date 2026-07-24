@@ -148,3 +148,12 @@ jobs:
             printf 'FlakeHub wildcard resolved %s, expected %s\n' "$revision" "$GITHUB_SHA" >&2
             exit 1
           fi
+
+      - name: Notify deploys channel
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_DEPLOYS_WEBHOOK }}
+        run: |
+          if [[ -z "$WEBHOOK" ]]; then echo "::notice::DISCORD_DEPLOYS_WEBHOOK not configured"; exit 0; fi
+          jq -nc --arg repo "$GITHUB_REPOSITORY" --arg sha "${GITHUB_SHA:0:12}" --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{allowed_mentions:{parse:[]},embeds:[{title:"FLAKEHUB RELEASE VERIFIED",description:("**Repository:** `"+$repo+"`\n**Commit:** `"+$sha+"`\n[Open workflow]("+$url+")"),color:5763719}]}' |
+            curl -fsS -H "Content-Type: application/json" --data @- "$WEBHOOK"
