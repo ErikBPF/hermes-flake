@@ -35,6 +35,17 @@
   availableExtras =
     workspace.deps.optionals.hermes-agent or [];
 
+  # The `wake` extra depends on `tflite-runtime` on Linux, but upstream only
+  # publishes cp311 wheels for it (no cp312/cp313 wheels and no sdist). Since
+  # this flake uses Python 3.13, the extra cannot be satisfied on Linux; drop it
+  # from the eager "full" install so CI and default consumers don't break.
+  # Users on Python 3.11 or Darwin can still request it explicitly via
+  # `hermes-agent.withExtras [ "wake" ]`.
+  fullExtras =
+    lib.subtractLists
+    (lib.optional (pkgs.stdenv.isLinux && lib.versionAtLeast python.version "3.12") "wake")
+    availableExtras;
+
   mkHermesPkg = {
     name,
     extras ? [],
@@ -91,11 +102,12 @@
       extras = [];
     };
 
-    # Every declared extra. Build may fail on sdist-only packages that
-    # forget setuptools in build-system.requires — see overrides.nix.
+    # Every declared extra that is satisfiable on this platform/Python combo.
+    # Build may fail on sdist-only packages that forget setuptools in
+    # build-system.requires — see overrides.nix.
     hermes-agent-full = mkHermesPkg {
       name = "hermes-agent-full";
-      extras = availableExtras;
+      extras = fullExtras;
     };
   };
 
