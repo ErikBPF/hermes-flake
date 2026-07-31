@@ -38,6 +38,13 @@
 in
   alibabaPatches
   // {
+    # Hermes' setup.py intentionally blocks wheel/sdist builds unless the
+    # HERMES_NIX_BUILD env var is set (this is how the upstream Nix build
+    # opts in). uv2nix doesn't know about that marker, so inject it here.
+    hermes-agent = prev.hermes-agent.overrideAttrs (old: {
+      HERMES_NIX_BUILD = "1";
+    });
+
     # Voice extras — portaudio
     sounddevice = prev.sounddevice.overrideAttrs (old: {
       buildInputs = (old.buildInputs or []) ++ [pkgs.portaudio];
