@@ -13,7 +13,7 @@ Conventional Commits in the git log; this file groups by release.
 - `extraEnvironment` option on the base service **and every wrapper** (container / microvm / podman) — attrset of extra `Environment=` vars for HERMES_* knobs without a dedicated option (e.g. `HERMES_YOLO_MODE`). Previously only the podman wrapper and home-manager client exposed it.
 - `enableHealthcheck` + `healthcheckInterval` — toggle / retune the `/health` poll.
 - `services.hermes-agent-container.extraServiceOptions` — opaque attrset forwarded to the inner `services.hermes-agent`.
-- Hourly auto-update workflow (`.github/workflows/update-hermes-agent.yml`) tracking upstream `NousResearch/hermes-agent` releases via `scripts/update-version.sh`.
+- App-authenticated fleet package updater tracking upstream `NousResearch/hermes-agent` releases via `scripts/update-version.sh`; pull-request CI owns validation.
 - Dependabot config for Actions pins.
 - `devShells.default` — nix tooling (alejandra, statix, deadnix, nil) + update flow tools.
 - `Justfile` — `just build`, `just check`, `just update`, `just extras`, etc.

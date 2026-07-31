@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Hourly auto-updater for hermes-flake. Polls upstream NousResearch/hermes-agent
-# for the latest tagged release, bumps flake.nix + flake.lock, verifies the
-# build, then exits. Returns:
+# Package updater for hermes-flake. Polls upstream NousResearch/hermes-agent
+# for the latest tagged release and bumps flake.nix + flake.lock. PR CI owns
+# build and smoke validation. Returns:
 #   0 — no update needed (already current)
-#   0 — update applied (and verified) when not --check-only
+#   0 — update applied when not --check-only
 #   1 — update available (when --check-only)
 #   2 — error
 set -euo pipefail
@@ -65,24 +65,6 @@ update_flake_pin() {
 update_flake_lock() {
     log_info "Updating flake.lock for hermes-agent-src..."
     nix flake update hermes-agent-src
-}
-
-verify_build() {
-    log_info "Verifying build..."
-    if ! nix build .#hermes-agent --no-link >/dev/null 2>&1; then
-        log_error "Build failed for the new pin"
-        return 1
-    fi
-    log_info "Build successful."
-}
-
-verify_smoke() {
-    log_info "Running smoke check..."
-    if ! nix build .#checks."$(nix eval --raw --impure --expr 'builtins.currentSystem')".smoke --no-link >/dev/null 2>&1; then
-        log_warn "Smoke check failed (might just be transient — re-run manually)."
-        return 1
-    fi
-    log_info "Smoke check passed."
 }
 
 show_changes() {
@@ -176,9 +158,6 @@ main() {
 
     update_flake_pin "$latest"
     update_flake_lock
-    verify_build
-    verify_smoke || log_warn "Smoke regression — review before merging"
-
     trap - EXIT
     rm -rf "$UPDATE_TMPDIR"
     log_info "Updated hermes-agent pin: $current → $latest"

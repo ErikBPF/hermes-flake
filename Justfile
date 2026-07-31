@@ -57,7 +57,7 @@ extras:
 update-check:
     ./scripts/update-version.sh --check
 
-# Apply the latest upstream release (bumps flake.nix + flake.lock, verifies build)
+# Apply the latest upstream release (bumps flake.nix + flake.lock; PR CI validates)
 update:
     ./scripts/update-version.sh
 

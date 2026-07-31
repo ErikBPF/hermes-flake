@@ -47,6 +47,9 @@ jobs:
       - name: lint (alejandra/statix/deadnix)
         run: nix build .#checks.${{ matrix.system }}.lint --print-build-logs
 
+      - name: updater mutation contract
+        run: nix build .#checks.${{ matrix.system }}.updater-mutation-only --print-build-logs
+
       - name: smoke (base)
         run: nix build .#checks.${{ matrix.system }}.smoke --print-build-logs
 
@@ -93,6 +96,7 @@ jobs:
             echo "### Required"
             echo "- nix flake check --no-build"
             echo "- lint"
+            echo "- updater mutation contract"
             echo "- base smoke"
             echo "- Hermes Desktop build"
             echo "- desktop smoke"

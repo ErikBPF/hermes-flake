@@ -65,7 +65,7 @@ Or via the GitHub web UI: paste the CHANGELOG section for the new tag.
 
 - Update `README.md` "Versions" table with the new entry.
 - Open a tracking issue for the next minor's roadmap.
-- If upstream has cut new releases since the tag, the hourly auto-update workflow will eventually open a follow-up bump PR for `main` — no manual action needed.
+- If upstream has cut new releases since the tag, the fleet package updater will eventually open a follow-up bump PR for `main` — no manual action needed.
 
 ## Hotfix flow
 
@@ -89,12 +89,8 @@ If a tag turns out to be broken:
 3. Update `README.md` "Versions" + `CHANGELOG.md` noting the bad tag.
 4. Optionally: `gh release edit v0.X.Y --notes "⚠️ Known bad — use v0.X.(Y+1)"`.
 
-## Yanking a release from the auto-update PR cron
+## Holding a broken upstream release
 
-If the cron tries to bump `hermes-agent` to a known-broken upstream tag, manually pin in `flake.nix` and push:
-
-```nix
-hermes-agent-src.url = "github:NousResearch/hermes-agent/v2026.M.D-1";  # previous tag
-```
-
-The hourly cron's `update-version.sh --check` will keep flagging the newer upstream tag as available; ignore the auto-PR until the upstream fix lands.
+Leave its failed package-update PR open while preparing the override or waiting
+for upstream. `main` keeps the previous pin, and the fleet updater skips the
+open PR instead of overwriting maintainer fixes or repeating the failure hourly.

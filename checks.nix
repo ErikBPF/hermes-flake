@@ -7,6 +7,18 @@
   hermes = self.packages.${system}.hermes-agent;
   hermesFull = self.packages.${system}.hermes-agent-full;
   hermesDesktop = self.packages.${system}.hermesDesktop;
+  mockUpdateNix = pkgs.writeShellApplication {
+    name = "nix";
+    text = ''
+      printf '%s\n' "$*" >> "$NIX_CALLS"
+      if [ "$*" = "flake update hermes-agent-src" ]; then
+        printf '\n' >> flake.lock
+        exit 0
+      fi
+      printf 'unexpected nix args: %s\n' "$*" >&2
+      exit 2
+    '';
+  };
 in {
   # ── Lint — formatting + statix + deadnix gate `nix flake check` ─────────
   lint = pkgs.runCommand "hermes-lint" {} ''
@@ -36,6 +48,20 @@ in {
     test -x ${hermes}/bin/hermes-acp
 
     echo "$version" > $out
+  '';
+
+  updater-mutation-only = pkgs.runCommand "hermes-updater-mutation-only" {} ''
+    cp -r ${self} source
+    chmod -R u+w source
+    cd source
+    export NIX_CALLS="$PWD/nix-calls"
+    : > "$NIX_CALLS"
+    PATH="${mockUpdateNix}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:${pkgs.bash}/bin:${pkgs.coreutils}/bin:${pkgs.gnused}/bin:${pkgs.gnugrep}/bin" \
+      ${pkgs.bash}/bin/bash ./scripts/update-version.sh --version v2099.1.1
+    grep -Fq 'github:NousResearch/hermes-agent/v2099.1.1' flake.nix
+    ! cmp ${self}/flake.lock flake.lock
+    [ "$(cat "$NIX_CALLS")" = "flake update hermes-agent-src" ]
+    touch "$out"
   '';
 
   # ── Closure-size guard — catches accidental dep bloat ────────────────────
