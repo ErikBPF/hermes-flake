@@ -9,18 +9,18 @@ This flake is a third-party Nix wrapper around [`NousResearch/hermes-agent`](htt
 | Hermes-agent crashes, weird LLM behavior, prompt issues, model selection | Upstream: [`NousResearch/hermes-agent`](https://github.com/NousResearch/hermes-agent/issues) |
 | `nix build` fails / closure issues / Python dep build errors | This repo |
 | NixOS module options / systemd unit / sops integration / container isolation | This repo |
-| Hourly auto-update workflow opened a broken PR | This repo |
+| Fleet package updater opened a broken PR | This repo |
 | Security vuln | [`SECURITY.md`](SECURITY.md) (private security advisory) |
 
 ## How updates land
 
 | Source | Mechanism | Cadence |
 |---|---|---|
-| Upstream `hermes-agent` releases | Hourly cron in `.github/workflows/update-hermes-agent.yml` polls GitHub releases, opens auto-merge PR if a new tag exists | Every hour, on the hour |
-| `nixpkgs` / `flake-parts` / `uv2nix` / `pyproject-nix` | Manual `nix flake update` | On demand or via Dependabot if added |
+| Upstream `hermes-agent` releases | App-backed fleet workflow calls `scripts/update-version.sh`; this repo's required checks gate auto-merge | Hourly at :17 |
+| `nixpkgs` / `flake-parts` / `uv2nix` / `pyproject-nix` | Renovate flake-input PRs | Renovate schedule |
 | C-extension overrides | Manual edit to `overrides.nix` when builds break | As needed |
 
-Goal: new upstream `hermes-agent` releases are mirrored to a tag here within ~30 min.
+Goal: new upstream `hermes-agent` releases enter review on the next hourly run.
 
 ## Manual local update
 
@@ -35,8 +35,8 @@ The script:
 2. Queries `https://api.github.com/repos/NousResearch/hermes-agent/releases/latest`
 3. Patches the URL via `sed`
 4. Runs `nix flake update hermes-agent-src`
-5. Verifies `nix build .#hermes-agent` succeeds + runs the smoke check
-6. Aborts (reverting flake files) if either fails
+5. Leaves build and smoke validation to required pull-request CI
+6. Reverts the flake files only if mutation fails
 
 ## Pinning model
 
