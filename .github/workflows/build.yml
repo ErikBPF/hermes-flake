@@ -139,7 +139,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: DeterminateSystems/determinate-nix-action@d96678350ffd6a456235832eb11e1c491589b7bb # v3
+      - uses: DeterminateSystems/determinate-nix-action@61cbfe2efc2d4e7a8a6d56967c3c1058e846c858 # v3
 
       - uses: DeterminateSystems/flakehub-push@0e801cf490b3b3dcb099131a69146bc59d610d0f # main, pinned 2026-06-30
         with:
@@ -155,7 +155,7 @@ jobs:
     needs: flakehub-publish
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - uses: DeterminateSystems/determinate-nix-action@d96678350ffd6a456235832eb11e1c491589b7bb # v3
+      - uses: DeterminateSystems/determinate-nix-action@61cbfe2efc2d4e7a8a6d56967c3c1058e846c858 # v3
 
       - name: FlakeHub wildcard resolves to this commit
         run: |
