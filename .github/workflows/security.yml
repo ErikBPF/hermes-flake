@@ -26,8 +26,9 @@ jobs:
         if: always() && github.event_name == 'push' && steps.gitleaks.outcome == 'failure'
         env:
           WEBHOOK: ${{ secrets.DISCORD_SECURITY_WEBHOOK }}
+          CLEYTIN_USER_ID: "1532710143517659356"
         run: |
           if [[ -z "$WEBHOOK" ]]; then echo "::notice::DISCORD_SECURITY_WEBHOOK not configured"; exit 0; fi
-          jq -nc --arg repo "$GITHUB_REPOSITORY" --arg ref "$GITHUB_REF_NAME" --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
-            '{allowed_mentions:{parse:[]},embeds:[{title:"SECRET SCAN FAILED",description:("**Repository:** `"+$repo+"`\n**Ref:** `"+$ref+"`\nFindings withheld from Discord.\n[Open workflow]("+$url+")"),color:15548997}]}' |
+          jq -nc --arg cleytin "$CLEYTIN_USER_ID" --arg repo "$GITHUB_REPOSITORY" --arg ref "$GITHUB_REF_NAME" --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{content:("<@"+$cleytin+">") ,allowed_mentions:{users:[$cleytin]},embeds:[{title:"SECRET SCAN FAILED",description:("**Repository:** `"+$repo+"`\n**Ref:** `"+$ref+"`\nFindings withheld from Discord.\n[Open workflow]("+$url+")"),color:15548997}]}' |
             curl -fsS -H "Content-Type: application/json" --data @- "$WEBHOOK"

@@ -123,10 +123,11 @@ jobs:
       - name: Notify CI channel
         env:
           WEBHOOK: ${{ secrets.DISCORD_CI_WEBHOOK }}
+          CLEYTIN_USER_ID: "1532710143517659356"
         run: |
           if [[ -z "$WEBHOOK" ]]; then echo "::notice::DISCORD_CI_WEBHOOK not configured"; exit 0; fi
-          jq -nc --arg repo "$GITHUB_REPOSITORY" --arg ref "$GITHUB_REF_NAME" --arg actor "$GITHUB_ACTOR" --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
-            '{allowed_mentions:{parse:[]},embeds:[{title:"CI FAILED",description:("**Repository:** `"+$repo+"`\n**Ref:** `"+$ref+"`\n**Actor:** `"+$actor+"`\n[Open workflow]("+$url+")"),color:15548997}]}' |
+          jq -nc --arg cleytin "$CLEYTIN_USER_ID" --arg repo "$GITHUB_REPOSITORY" --arg ref "$GITHUB_REF_NAME" --arg actor "$GITHUB_ACTOR" --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{content:("<@"+$cleytin+">") ,allowed_mentions:{users:[$cleytin]},embeds:[{title:"CI FAILED",description:("**Repository:** `"+$repo+"`\n**Ref:** `"+$ref+"`\n**Actor:** `"+$actor+"`\n[Open workflow]("+$url+")"),color:15548997}]}' |
             curl -fsS -H "Content-Type: application/json" --data @- "$WEBHOOK"
 
   flakehub-publish:
