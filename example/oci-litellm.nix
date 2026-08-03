@@ -47,20 +47,19 @@ in {
 
     # ── Providers / models — rendered into /opt/data/config.yaml ───────────
     settings = {
-      # Primary chat brain: GLM-5.2 via LiteLLM (flat-rate opencode Go).
+      # Primary chat brain: DeepSeek V4 Flash via LiteLLM (opencode Go).
       model = {
         provider = "custom";
-        default = "glm-5";
+        default = "deepseek-v4-flash";
         base_url = litellmUrl;
         api_key = "\${OPENAI_API_KEY}";
         # `context_length` (upstream v2026.6.19); must match the served context
         # on the model host. `max_context` is silently ignored.
-        context_length = 196608;
+        context_length = 1000000;
       };
 
       # Switchable coding/heavy models — flat-rate opencode Go routes exposed
-      # on the proxy. Pick at runtime with `/model kimi-k2-code` etc. Default
-      # stays local qwen-chat so casual turns never touch the shared budget.
+      # on the proxy. Pick at runtime with `/model kimi-k2-code` etc.
       model_aliases = {
         qwen = {
           model = "qwen-chat";
