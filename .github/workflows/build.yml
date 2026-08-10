@@ -29,6 +29,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: CI notification contract
+        run: bash tests/ci-notification-contract.sh
+
       - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
 
       - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
@@ -116,8 +119,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   notify-ci:
-    needs: build
-    if: ${{ always() && needs.build.result == 'failure' }}
+    needs: [build, flakehub-publish, flakehub-verify]
+    if: ${{ always() && contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     steps:
       - name: Notify CI channel
