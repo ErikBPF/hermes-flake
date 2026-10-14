@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           tag=$(sed -n 's|.*github:NousResearch/hermes-agent/\([^"]*\)".*|\1|p' flake.nix | head -1)
-          if ! printf '%s\n' "$tag" | grep -Eq '^v[0-9]{4}\.[0-9]+\.[0-9]+$'; then
+          if ! printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
             echo "current hermes-agent pin is not a release tag: $tag" >&2
             exit 0
           fi

@@ -5,7 +5,31 @@
   system,
 }: let
   hermesSrc = inputs.hermes-agent-src;
-  python = pkgs.python313;
+  python = pkgs.python314;
+  upstreamLock = (builtins.fromJSON (builtins.readFile ./flake.lock)).nodes.hermes-agent-src;
+  releaseVersion = lib.removePrefix "v" upstreamLock.original.ref;
+  # Match upstream nix/hermes-agent.nix: immutable Nix builds own provenance.
+  installStamp = assert lib.assertMsg
+  (builtins.match "v[0-9]+\\.[0-9]+\\.[0-9]+(\\.[0-9]+)?" upstreamLock.original.ref
+    != null
+    && hermesSrc.rev == upstreamLock.locked.rev)
+  "Hermes release identity requires a stable locked tag and matching source revision";
+    pkgs.writeText "hermes-install-stamp.json" (builtins.toJSON {
+      schemaVersion = 2;
+      commit = hermesSrc.rev;
+      commitDate = upstreamLock.locked.lastModified;
+      branch = null;
+      dirty = false;
+      builtAt = null;
+      baseVersion = releaseVersion;
+      displayVersion = releaseVersion;
+      distance = 0;
+      source = "nix";
+      distribution = "nix";
+      updateMechanism = "external";
+      payload = "bootstrap";
+      tag = null;
+    });
 
   workspace = inputs.uv2nix.lib.workspace.loadWorkspace {
     workspaceRoot = hermesSrc;
@@ -26,6 +50,15 @@
         inputs.pyproject-build-systems.overlays.default
         overlay
         overrides
+        (_final: prev: {
+          hermes-agent = prev.hermes-agent.overrideAttrs (old: {
+            postInstall =
+              (old.postInstall or "")
+              + ''
+                cp ${installStamp} $out/${python.sitePackages}/install-stamp.json
+              '';
+          });
+        })
       ]
     );
 
@@ -37,7 +70,7 @@
 
   # The `wake` extra depends on `tflite-runtime` on Linux, but upstream only
   # publishes cp311 wheels for it (no cp312/cp313 wheels and no sdist). Since
-  # this flake uses Python 3.13, the extra cannot be satisfied on Linux; drop it
+  # this flake uses Python 3.14, the extra cannot be satisfied on Linux; drop it
   # from the eager "full" install so CI and default consumers don't break.
   # Users on Python 3.11 or Darwin can still request it explicitly via
   # `hermes-agent.withExtras [ "wake" ]`.

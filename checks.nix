@@ -7,12 +7,30 @@
   hermes = self.packages.${system}.hermes-agent;
   hermesFull = self.packages.${system}.hermes-agent-full;
   hermesDesktop = self.packages.${system}.hermesDesktop;
+  hermesExtras = hermes.withExtras ["anthropic"];
+  upstreamLock = (builtins.fromJSON (builtins.readFile ./flake.lock)).nodes.hermes-agent-src;
+  expectedVersion = lib.removePrefix "v" upstreamLock.original.ref;
+  releaseTags = ["v0.21.7" "v2099.1.1" "v2099.1.1.2" "v0.21.7.1"];
+  invalidTags = ["0.21.7" "v0.21" "v0..7" "v0.21.7-rc.1" "v0.21.7+build" "v0.21.7junk" "v0.21.7.1.2" "v2099.1.1-rc.1" "v2099.1.1.2junk"];
+  # Evaluate the actual package predicate in Nix, not a copied Bash regex.
+  provenancePredicate = let
+    predicates = lib.splitString "builtins.match \"" (builtins.readFile ./package.nix);
+    boundaries = lib.splitString "\" upstreamLock.original.ref" (builtins.elemAt predicates 1);
+  in
+    assert lib.assertMsg (builtins.length predicates == 2 && builtins.length boundaries == 2)
+    "package provenance predicate extraction requires exactly one match";
+      builtins.fromJSON ("\"" + builtins.head boundaries + "\"");
+  rejectedReleases = builtins.filter (tag: builtins.match provenancePredicate tag == null) releaseTags;
+  acceptedInvalidTags = builtins.filter (tag: builtins.match provenancePredicate tag != null) invalidTags;
   mockUpdateNix = pkgs.writeShellApplication {
     name = "nix";
     text = ''
       printf '%s\n' "$*" >> "$NIX_CALLS"
       if [ "$*" = "flake update hermes-agent-src" ]; then
         printf '\n' >> flake.lock
+        if [ "''${MOCK_NIX_FAIL:-0}" = 1 ]; then
+          exit 1
+        fi
         exit 0
       fi
       printf 'unexpected nix args: %s\n' "$*" >&2
@@ -31,38 +49,109 @@ in {
   '';
 
   # ── Smoke — base variant ─────────────────────────────────────────────────
-  # Version is asserted to match what the workspace's pyproject.toml claims —
-  # no hardcoded string, no breakage on upstream bump.
+  # Upstream project metadata is a placeholder; the locked release owns identity.
   smoke = pkgs.runCommand "hermes-smoke" {} ''
-    expected=$(${pkgs.gnused}/bin/sed -n 's/^version *= *"\([^"]*\)".*/\1/p' \
-                 ${self.inputs.hermes-agent-src}/pyproject.toml | head -1)
-    version=$(${hermes}/bin/hermes --version)
-    if ! echo "$version" | grep -qF "v$expected"; then
-      echo "expected v$expected in output, got:" >&2
-      echo "$version" >&2
-      exit 1
-    fi
+    ${hermes.venv}/bin/python ${self}/tests/release-identity.py \
+      ${hermes}/bin/hermes ${lib.escapeShellArg expectedVersion} \
+      ${lib.escapeShellArg upstreamLock.locked.rev} > $out
 
     test -x ${hermes}/bin/hermes
     test -x ${hermes}/bin/hermes-agent
     test -x ${hermes}/bin/hermes-acp
 
-    echo "$version" > $out
   '';
 
-  updater-mutation-only = pkgs.runCommand "hermes-updater-mutation-only" {} ''
-    cp -r ${self} source
-    chmod -R u+w source
-    cd source
-    export NIX_CALLS="$PWD/nix-calls"
-    : > "$NIX_CALLS"
-    PATH="${mockUpdateNix}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:${pkgs.bash}/bin:${pkgs.coreutils}/bin:${pkgs.gnused}/bin:${pkgs.gnugrep}/bin" \
-      ${pkgs.bash}/bin/bash ./scripts/update-version.sh --version v2099.1.1
-    grep -Fq 'github:NousResearch/hermes-agent/v2099.1.1' flake.nix
-    ! cmp ${self}/flake.lock flake.lock
-    [ "$(cat "$NIX_CALLS")" = "flake update hermes-agent-src" ]
-    touch "$out"
+  release-identity-extras = pkgs.runCommand "hermes-release-identity-extras" {} ''
+    ${hermesExtras.venv}/bin/python ${self}/tests/release-identity.py \
+      ${hermesExtras}/bin/hermes ${lib.escapeShellArg expectedVersion} \
+      ${lib.escapeShellArg upstreamLock.locked.rev} > $out
   '';
+
+  updater-mutation-only = assert lib.assertMsg (rejectedReleases == [])
+  "package provenance rejects accepted release tags: ${lib.concatStringsSep ", " rejectedReleases}";
+  assert lib.assertMsg (acceptedInvalidTags == [])
+  "package provenance accepts malformed release tags: ${lib.concatStringsSep ", " acceptedInvalidTags}";
+    pkgs.runCommand "hermes-updater-mutation-only" {
+      nativeBuildInputs = [pkgs.bash pkgs.coreutils pkgs.curl pkgs.gnugrep pkgs.gnused pkgs.jq];
+    } ''
+      export PATH="${mockUpdateNix}/bin:$PATH"
+      sourceRoot=${self}
+      fixtureRoot=$PWD
+      failures=0
+      assert() {
+        label=$1
+        shift
+        if ! "$@"; then
+          echo "FAIL $label" >&2
+          failures=$((failures + 1))
+        fi
+      }
+      fresh() {
+        cd "$fixtureRoot"
+        caseRoot=$(mktemp -d "$fixtureRoot/case.XXXXXX")
+        mkdir "$caseRoot/scripts"
+        cp "$sourceRoot/flake.nix" "$sourceRoot/flake.lock" "$caseRoot/"
+        cp "$sourceRoot/scripts/update-version.sh" "$caseRoot/scripts/"
+        chmod -R u+w "$caseRoot"
+        cd "$caseRoot"
+        sed -i 's|github:NousResearch/hermes-agent/[^\"]*|github:NousResearch/hermes-agent/v2098.12.31|' flake.nix
+        cp flake.nix original-flake.nix
+        cp flake.lock original-flake.lock
+        export NIX_CALLS="$caseRoot/nix-calls"
+        : > "$NIX_CALLS"
+        export TMPDIR="$caseRoot"
+        export MOCK_NIX_FAIL=0
+      }
+      run_updater() {
+        status=0
+        bash ./scripts/update-version.sh "$@" > updater.log 2>&1 || status=$?
+      }
+      unchanged() {
+        assert "$tag flake.nix unchanged" cmp original-flake.nix flake.nix
+        assert "$tag flake.lock unchanged" cmp original-flake.lock flake.lock
+      }
+      predicate=$(sed -n "s/.*grep -Eq '\([^']*\)'; then/\1/p" \
+        "$sourceRoot/.github/workflows/auto-tag-bump.yml")
+      [ "$(printf '%s\n' "$predicate" | grep -c .)" = 1 ] || {
+        echo 'FAIL workflow predicate must have exactly one match' >&2
+        exit 1
+      }
+      for tag in ${lib.escapeShellArgs releaseTags}; do
+        assert "$tag workflow accepts stable release" grep -Eq "$predicate" <<< "$tag"
+        fresh
+        run_updater --version "$tag"
+        assert "$tag updater accepts stable release" test "$status" = 0
+        assert "$tag source URL updated" grep -Fq "github:NousResearch/hermes-agent/$tag\"" flake.nix
+        if cmp -s original-flake.lock flake.lock; then
+          assert "$tag lock changed" false
+        fi
+        assert "$tag exactly one upstream update" test "$(cat "$NIX_CALLS")" = 'flake update hermes-agent-src'
+        fresh
+        run_updater --check --version "$tag"
+        assert "$tag check-only update available" test "$status" = 1
+        unchanged
+        assert "$tag check-only no Nix calls" test ! -s "$NIX_CALLS"
+      done
+      for tag in ${lib.escapeShellArgs invalidTags}; do
+        if grep -Eq "$predicate" <<< "$tag"; then
+          assert "$tag workflow rejects malformed release" false
+        fi
+        fresh
+        run_updater --version "$tag"
+        assert "$tag updater rejects malformed release" test "$status" = 2
+        unchanged
+        assert "$tag invalid no Nix calls" test ! -s "$NIX_CALLS"
+      done
+      tag=v2099.1.1
+      fresh
+      export MOCK_NIX_FAIL=1
+      run_updater --version "$tag"
+      assert 'failed lock update returns nonzero' test "$status" != 0
+      unchanged
+      assert 'failed lock update invoked exactly once' test "$(cat "$NIX_CALLS")" = 'flake update hermes-agent-src'
+      [ "$failures" = 0 ] || exit 1
+      touch "$out"
+    '';
 
   # ── Closure-size guard — catches accidental dep bloat ────────────────────
   # Base variant should stay under 1500 MB. Bump deliberately if upstream
@@ -84,15 +173,9 @@ in {
 
   # ── Smoke — full variant ─────────────────────────────────────────────────
   smoke-full = pkgs.runCommand "hermes-smoke-full" {} ''
-    expected=$(${pkgs.gnused}/bin/sed -n 's/^version *= *"\([^"]*\)".*/\1/p' \
-                 ${self.inputs.hermes-agent-src}/pyproject.toml | head -1)
-    version=$(${hermesFull}/bin/hermes --version)
-    if ! echo "$version" | grep -qF "v$expected"; then
-      echo "expected v$expected in output, got:" >&2
-      echo "$version" >&2
-      exit 1
-    fi
-    echo "$version" > $out
+    ${hermesFull.venv}/bin/python ${self}/tests/release-identity.py \
+      ${hermesFull}/bin/hermes ${lib.escapeShellArg expectedVersion} \
+      ${lib.escapeShellArg upstreamLock.locked.rev} > $out
   '';
 
   # ── Smoke — desktop variant ──────────────────────────────────────────────
