@@ -50,11 +50,9 @@ in let
       buildPhase = ''
         runHook preBuild
 
-        # write-build-stamp.cjs replacement.  Packaged Electron reads this
-        # at first-launch to pin the install.ps1 git ref; informational in
-        # nix builds (the backend comes from the derivation directly).
+        # Electron and the native backend consume the same immutable Nix identity.
         mkdir -p apps/desktop/build
-        echo '{"schemaVersion":1,"commit":"nix","branch":"nix","dirty":false,"source":"nix"}' > apps/desktop/build/install-stamp.json
+        cp ${hermesAgent.venv}/${hermesAgent.python.sitePackages}/install-stamp.json apps/desktop/build/install-stamp.json
 
         # patch shebangs in node_modules/.bin so npm exec can find the
         # nix-store equivalents of /usr/bin/env (which doesn't exist in the sandbox)
@@ -67,6 +65,8 @@ in let
           npm exec vite build
           node scripts/bundle-electron-main.mjs
           node scripts/stage-native-deps.mjs
+          node --input-type=module -e \
+            "import { copyNativeTree } from './scripts/prepared-native-deps.mjs'; copyNativeTree({ nativeDeps: 'build/native-deps', out: 'dist/node_modules' })"
         popd
 
         runHook postBuild
@@ -77,7 +77,13 @@ in let
 
         pushd apps/desktop
 
-          npm run postbuild
+          # Bundling and native staging already ran in buildPhase.
+          for artifact in index.html electron-main.mjs electron-preload.js preview-guest-preload.js; do
+            if [ ! -s "./dist/$artifact" ]; then
+              echo "FATAL: Missing desktop build artifact at ./dist/$artifact"
+              exit 1
+            fi
+          done
 
           # validate staged node-pty native binary is present
           STAGED_PTY_NODE="./dist/node_modules/node-pty/build/Release/pty.node"
@@ -155,6 +161,7 @@ in
     '';
 
     passthru = {
+      inherit renderer;
       inherit (renderer.passthru) packageJsonPath;
     };
 

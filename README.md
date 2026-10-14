@@ -131,6 +131,8 @@ Inspect interactively:
 
 ## See also
 
+- [`docs/audits/2026-10-14-hermes-release-update-one-pager.md`](docs/audits/2026-10-14-hermes-release-update-one-pager.md) — release update evidence and remaining delivery gates
+- [`docs/behaviors/hermes-release-update.feature`](docs/behaviors/hermes-release-update.feature) — executable-check-bound release behavior contract
 - [`docs/ENV_VARS.md`](docs/ENV_VARS.md) — upstream-audited env var truth table
 - [`docs/ISOLATION.md`](docs/ISOLATION.md) — bare-metal / nspawn / podman / microvm trade-offs
 - [`docs/CLIENT.md`](docs/CLIENT.md) — client patterns (local CLI / delegated / web / messaging / ACP)

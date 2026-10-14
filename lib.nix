@@ -11,7 +11,18 @@
   hermesSrc,
 }: let
   # npm dependencies for the workspace, resolved from the lockfile.
-  npmDeps = pkgs.importNpmLock.importNpmLock {npmRoot = hermesSrc;};
+  npmDeps = pkgs.importNpmLock.importNpmLock {
+    npmRoot = hermesSrc;
+    package = let
+      upstream = builtins.fromJSON (builtins.readFile (hermesSrc + "/package.json"));
+    in
+      upstream
+      // {
+        # importNpmLock rewrites direct dependencies to file: URLs; follow that
+        # exact locked spec without dropping the upstream security override.
+        overrides = upstream.overrides // {"js-yaml@^4" = "$js-yaml";};
+      };
+  };
 in {
   # Returns a buildNpmPackage-compatible attrs set that provides:
   #   src, npmDeps, npmRoot      — workspace source + importNpmLock dep set
