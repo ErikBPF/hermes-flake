@@ -67,6 +67,26 @@ in {
       ${lib.escapeShellArg upstreamLock.locked.rev} > $out
   '';
 
+  desktop-build-stamp = let
+    phases = lib.splitString "# patch shebangs" hermesDesktop.renderer.buildPhase;
+    nativePhases = lib.splitString "node scripts/stage-native-deps.mjs" hermesDesktop.renderer.buildPhase;
+    nativeCopyPhases = lib.splitString "popd" (builtins.elemAt nativePhases 1);
+  in
+    assert lib.assertMsg (builtins.length phases == 2) "desktop stamp fixture requires exactly one phase boundary";
+    assert lib.assertMsg (builtins.length nativePhases == 2 && builtins.length nativeCopyPhases == 2) "desktop native-copy fixture requires exactly one phase boundary";
+      pkgs.runCommand "hermes-desktop-build-stamp" {
+        nativeBuildInputs = [pkgs.nodejs_22];
+      } ''
+        ${builtins.head phases}
+        export HOME=$(mktemp -d)
+        export HERMES_HOME="$HOME/hermes"
+        node ${self}/tests/desktop-build-stamp.mjs ${self.inputs.hermes-agent-src} \
+          apps/desktop/build/install-stamp.json ${lib.escapeShellArg expectedVersion} \
+          ${lib.escapeShellArg upstreamLock.locked.rev} \
+          ${pkgs.writeText "desktop-check-phase.sh" hermesDesktop.renderer.checkPhase} \
+          ${pkgs.writeText "desktop-native-copy-phase.sh" (builtins.head nativeCopyPhases)} > $out
+      '';
+
   npm-workspace-overrides = let
     npmLib = import ./lib.nix {
       inherit pkgs;
