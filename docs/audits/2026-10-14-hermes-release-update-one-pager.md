@@ -1,12 +1,52 @@
 # Hermes release updater and package — leaf delivery checkpoint
 
-**Stage / revision:** L1/L2 implementation GREEN; P2 compatibility repair verified; main RV and required CI pending / 7
-**Outcome:** requested upstream `v0.21.7` builds and reports native `0.21.7` with
-the actual locked revision; base/extras smoke, updater, OCI and config checks pass.
+**Stage / revision:** PR CI failure diagnosed; candidate 1 pending independent RV / 8
+**Outcome:** native leaf checks remain GREEN; both protected architecture builds
+failed desktop npm configuration. Shared npm adapter repair has local regression
+GREEN; bounded local desktop build timed out during dependency fetch. Neither
+architecture CI is GREEN, and actual desktop repair remains unverified.
 **Human seed:** `lets do both. Also check our litellm health`
 **Accepted scope:** stable release handling and upstream `v0.21.7`, from homelab
 `docs/plans/2026-10-14-hermes-agent-delivery.md` and its linked delivery one-pager.
-No publication, merge, deployment, or runtime inference performed here.
+Main published [PR #59](https://github.com/ErikBPF/hermes-flake/pull/59).
+This CI repair is uncommitted/unpublished; no merge, deployment or inference here.
+
+## Current CI candidate
+
+Verified checkout, PR and run head:
+`2195d6af6e3b2df069c8bec838c6dbd2da060fe7`. Run `38583250103` failed
+`build Hermes Desktop` on both
+[x86](https://github.com/ErikBPF/hermes-flake/actions/runs/38583250103/job/115918386882)
+and [ARM](https://github.com/ErikBPF/hermes-flake/actions/runs/38583250103/job/115918387470):
+`npm error code EOVERRIDE`, direct `js-yaml` file URL conflicts with override.
+These are observed source/build failures, not download infrastructure failures.
+
+Root cause: `importNpmLock` rewrites direct dependencies to locked file URLs but
+leaves override literal `4.3.1`. Candidate 1 changes only shared `lib.nix` adapter
+to npm's [documented direct-spec reference](https://docs.npmjs.com/cli/v10/configuring-npm/package-json/#overrides),
+`"js-yaml@^4": "$js-yaml"`. Exact upstream/lock version `4.3.1`, archive identity
+and every other security override remain unchanged. No weaker npm flags or CI gates.
+
+Receipts below are in `leaf-pr59-ci-MUNsA5/`, all mode `0600`:
+
+- `run.json`, `x86-failed.log`, `arm-failed.log`: verified head and failed-step-only
+  public logs; same error family on both architectures.
+- `local-assert-red-G8QFgC.log`: actual adapter assertion fails before production
+  repair, `npm direct js-yaml override must follow the rewritten locked dependency`.
+  Initial `local-red.log` hit a test-only JSON string-context error, not RED;
+  corrected metadata parsing discards context only in test assertions.
+- `local-green-ZQDxBR.log`: adapter regression builds on x86 and evaluates on ARM;
+  base/extras native identity and updater checks pass. This is not ARM runtime CI.
+- `cached-regression-GZ4xRH.log`: npm regression, base/extras identity, updater,
+  OCI/role-OCI, config/schema and existing lint all pass; accepted ref/revision
+  unchanged. Existing masked statix/deadnix limits remain, not repaired here.
+- `desktop-candidate1-ABwPMi.log`: job `sh_13ae7fe37001FbWdDgteoOkAjA` completed
+  with timeout exit 124 after 480 seconds, still fetching npm archives. Renderer
+  configuration was not reached; desktop smoke did not run. This is a verification
+  limit, not source RED or proof that EOVERRIDE is resolved. No active jobs.
+  Main must independently review candidate before a normal new commit/push,
+  then require both architecture checks on the actual new PR head. No bypass,
+  workflow rerun, publication or additional unbounded build was performed here.
 
 ## Checkout and changes
 
@@ -98,4 +138,5 @@ repaired in a new receipt. No discarded user work or global identity changes.
 
 Main-session RV and real green required checks remain gates. Preserve old pins;
 stop on incompatible native version or observed package failure rather than
-silently changing acceptance. Bootstrap is the only new commit so far.
+silently changing acceptance. Main's first implementation is committed/published;
+this CI repair remains an uncommitted candidate against that preserved draft.

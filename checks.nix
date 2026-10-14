@@ -67,6 +67,32 @@ in {
       ${lib.escapeShellArg upstreamLock.locked.rev} > $out
   '';
 
+  npm-workspace-overrides = let
+    npmLib = import ./lib.nix {
+      inherit pkgs;
+      nodejs = pkgs.nodejs_22;
+      hermesSrc = self.inputs.hermes-agent-src;
+      npm-lockfile-fix = self.inputs.npm-lockfile-fix.packages.${system}.default;
+    };
+    deps =
+      (npmLib.mkNpmPassthru {
+        folder = "apps/desktop";
+        attr = "desktop";
+      }).npmDeps;
+    generated = builtins.fromJSON (builtins.unsafeDiscardStringContext deps.package);
+    source = builtins.fromJSON (builtins.readFile (self.inputs.hermes-agent-src + "/package.json"));
+    lock = builtins.fromJSON (builtins.unsafeDiscardStringContext deps.packageLock);
+  in
+    assert lib.assertMsg (generated.overrides."js-yaml@^4" == "$js-yaml")
+    "npm direct js-yaml override must follow the rewritten locked dependency";
+    assert source.overrides."js-yaml@^4" == source.dependencies.js-yaml;
+    assert lock.packages."node_modules/js-yaml".version == source.dependencies.js-yaml;
+    assert generated.dependencies.js-yaml == lock.packages."node_modules/js-yaml".resolved;
+    assert builtins.removeAttrs generated.overrides ["js-yaml@^4"] == builtins.removeAttrs source.overrides ["js-yaml@^4"];
+      pkgs.runCommand "hermes-npm-workspace-overrides" {} ''
+        touch $out
+      '';
+
   updater-mutation-only = assert lib.assertMsg (rejectedReleases == [])
   "package provenance rejects accepted release tags: ${lib.concatStringsSep ", " rejectedReleases}";
   assert lib.assertMsg (acceptedInvalidTags == [])
