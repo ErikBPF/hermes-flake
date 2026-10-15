@@ -28,7 +28,7 @@
     };
 
     hermes-agent-src = {
-      url = "github:NousResearch/hermes-agent/v0.21.7";
+      url = "github:NousResearch/hermes-agent/v0.22.2";
       flake = false;
     };
 
