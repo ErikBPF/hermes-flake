@@ -407,6 +407,7 @@ in {
     c = sys.config.virtualisation.oci-containers.containers.hermes-agent;
     healthService = sys.config.systemd.services.hermes-agent-healthcheck;
     healthTimer = sys.config.systemd.timers.hermes-agent-healthcheck;
+    startGate = sys.config.systemd.services."docker-hermes-agent".serviceConfig.ExecStartPost;
   in
     pkgs.runCommand "hermes-oci-module" {
       img = c.image;
@@ -414,6 +415,7 @@ in {
       home = c.environment.HERMES_HOME;
       healthExec = healthService.serviceConfig.ExecStart;
       healthTimerTarget = lib.concatStringsSep "\n" healthTimer.wantedBy;
+      startGatePaths = lib.concatStringsSep " " startGate;
     } ''
       echo "image: $img"
       echo "$img" | grep -q '^nousresearch/hermes-agent' || { echo "not the official image" >&2; exit 1; }
@@ -424,6 +426,9 @@ in {
       grep -q 'docker inspect' "$healthExec" || { echo "unpublished OCI health probe does not inspect the container" >&2; exit 1; }
       grep -q 'http://$probeHost:8642/health' "$healthExec" || { echo "unpublished OCI health probe URL missing" >&2; exit 1; }
       echo "$healthTimerTarget" | grep -qx 'timers.target' || { echo "OCI health timer not enabled" >&2; exit 1; }
+      [ -n "$startGatePaths" ] || { echo "container unit has no start gate" >&2; exit 1; }
+      grep -q '/health' $startGatePaths || { echo "start gate does not probe /health" >&2; exit 1; }
+      grep -q 'not ready after' $startGatePaths || { echo "start gate has no bounded timeout" >&2; exit 1; }
       echo ok > $out
     '';
 
