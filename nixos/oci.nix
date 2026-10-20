@@ -42,6 +42,41 @@
 
   healthcheckUnit = "${cfg.containerName}-healthcheck";
   containerUnit = "${cfg.backend}-${cfg.containerName}.service";
+
+  # Readiness gate for the container unit. `docker run` returning does not mean
+  # the gateway serves /health — discovery observed ~3 min between the unit
+  # reporting started and the health endpoint answering during a recreate.
+  # Reuse the same probe as the periodic sidecar so "ready" has one definition.
+  # A failure fails THIS unit (attributable) and never an unrelated one.
+  startGate = let
+    probeHost = shared.probeHostFor cfg.openBindAddress;
+    runtime =
+      if cfg.backend == "docker"
+      then "${pkgs.docker}/bin/docker"
+      else "${pkgs.podman}/bin/podman";
+  in
+    pkgs.writeShellScript "${cfg.containerName}-start-gate" ''
+      set -uo pipefail
+      deadline=$(( $(${pkgs.coreutils}/bin/date +%s) + ${toString cfg.healthcheckStartTimeout} ))
+      while :; do
+        ${
+        if cfg.publishPorts
+        then "probeHost=${lib.escapeShellArg probeHost}"
+        else ''
+          probeHost="$(${runtime} inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${lib.escapeShellArg cfg.containerName} 2>/dev/null || true)"
+        ''
+      }
+        if [ -n "$probeHost" ] && ${pkgs.curl}/bin/curl -fsS --max-time 5 --connect-timeout 3 \
+          "http://$probeHost:${toString cfg.apiPort}/health" > /dev/null 2>&1; then
+          exit 0
+        fi
+        if [ "$(${pkgs.coreutils}/bin/date +%s)" -ge "$deadline" ]; then
+          echo "start gate: /health not ready after ${toString cfg.healthcheckStartTimeout}s" >&2
+          exit 1
+        fi
+        ${pkgs.coreutils}/bin/sleep 5
+      done
+    '';
 in {
   options.services.${optionName} =
     shared.options
@@ -273,6 +308,13 @@ in {
           OnUnitActiveSec = cfg.healthcheckInterval;
         };
       };
+
+      # The container unit reports started only once /health answers. ExecStartPost
+      # runs after the backend invoked `docker run` (Type=simple on this backend),
+      # so the gate tolerates the container not existing yet. TimeoutStartSec is
+      # left at the OCI module's 0/unbounded default; the gate bounds itself.
+      services.${lib.removeSuffix ".service" containerUnit}.serviceConfig.ExecStartPost =
+        lib.mkIf cfg.enableHealthcheck [startGate];
     };
   };
 }

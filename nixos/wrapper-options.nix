@@ -132,6 +132,16 @@ with lib; rec {
       default = "60s";
     };
 
+    healthcheckStartTimeout = mkOption {
+      type = types.ints.positive;
+      default = 300;
+      description = ''
+        Seconds the container unit's start gate waits for /health before it
+        fails. Size this from the observed start period (discovery measured
+        ~3 min during a recreate); the gate makes "unit started" mean "serving".
+      '';
+    };
+
     extraServiceDeps = mkOption {
       type = types.listOf types.str;
       default = [];
