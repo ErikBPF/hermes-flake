@@ -447,13 +447,13 @@ in {
             enable = true;
             hostDataDir = "/var/lib/hermes-daedalus";
             environmentFile = "/run/secrets/hermes-daedalus";
-            settings.model.default = "glm-5";
+            settings.model.default = "deepseek-v4.1-flash";
           };
           services.hermes-agent-oci-argus = {
             enable = true;
             hostDataDir = "/var/lib/hermes-argus";
             environmentFile = "/run/secrets/hermes-argus";
-            settings.model.default = "glm-5";
+            settings.model.default = "deepseek-v4.1-flash";
           };
         }
       ];

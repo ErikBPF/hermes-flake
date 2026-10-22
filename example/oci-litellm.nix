@@ -71,11 +71,6 @@ in {
           provider = "custom";
           base_url = litellmUrl;
         };
-        glm = {
-          model = "glm-5";
-          provider = "custom";
-          base_url = litellmUrl;
-        };
         qwen-max = {
           model = "qwen3-max";
           provider = "custom";
