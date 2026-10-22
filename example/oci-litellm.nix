@@ -50,7 +50,7 @@ in {
       # Primary chat brain: DeepSeek V4 Flash via LiteLLM (opencode Go).
       model = {
         provider = "custom";
-        default = "deepseek-v4-flash";
+        default = "deepseek-v4.1-flash";
         base_url = litellmUrl;
         api_key = "\${OPENAI_API_KEY}";
         # `context_length` (upstream v2026.6.19); must match the served context
