@@ -47,6 +47,12 @@ in let
       inherit version;
       doCheck = true;
 
+      # tsc -b exceeds the default ~2 GB V8 heap; nixbuild.net gives small
+      # builds little memory unless they ask for big-parallel.
+      # HACK https://gitlab.com/moduon/islands/-/jobs/17450858428
+      requiredSystemFeatures = ["big-parallel"];
+      NODE_OPTIONS = "--max-old-space-size=8192";
+
       buildPhase = ''
         runHook preBuild
 
