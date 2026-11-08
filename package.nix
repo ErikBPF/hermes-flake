@@ -151,7 +151,7 @@
     hermesNpmLib = import ./lib.nix {
       inherit pkgs;
       npm-lockfile-fix = npm-lockfile-fix-pkg;
-      nodejs = pkgs.nodejs_22;
+      nodejs = pkgs.nodejs_26;
       inherit hermesSrc;
     };
   in

@@ -75,7 +75,7 @@ in {
     assert lib.assertMsg (builtins.length phases == 2) "desktop stamp fixture requires exactly one phase boundary";
     assert lib.assertMsg (builtins.length nativePhases == 2 && builtins.length nativeCopyPhases == 2) "desktop native-copy fixture requires exactly one phase boundary";
       pkgs.runCommand "hermes-desktop-build-stamp" {
-        nativeBuildInputs = [pkgs.nodejs_22];
+        nativeBuildInputs = [pkgs.nodejs_26];
       } ''
         ${builtins.head phases}
         export HOME=$(mktemp -d)
@@ -90,7 +90,7 @@ in {
   npm-workspace-overrides = let
     npmLib = import ./lib.nix {
       inherit pkgs;
-      nodejs = pkgs.nodejs_22;
+      nodejs = pkgs.nodejs_26;
       hermesSrc = self.inputs.hermes-agent-src;
       npm-lockfile-fix = self.inputs.npm-lockfile-fix.packages.${system}.default;
     };
