@@ -28,13 +28,8 @@
     };
 
     hermes-agent-src = {
-      url = "github:NousResearch/hermes-agent/v0.23.0";
+      url = "github:NousResearch/hermes-agent/v0.23.1";
       flake = false;
-    };
-
-    npm-lockfile-fix = {
-      url = "github:jeslie0/npm-lockfile-fix";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     # Optional — only required when using nixosModules.hermes-agent-microvm.

@@ -1,67 +1,229 @@
-# nix/lib.nix — Shared helpers for npm workspace builds
+# nix/lib.nix — Shared helpers for nix stuff
 #
-# Adapted from upstream NousResearch/hermes-agent nix/lib.nix.
-# All npm packages in the upstream repo are workspace members sharing a single
-# root package-lock.json.  mkNpmPassthru provides the shared src, npmDeps,
-# npmRoot, and npmConfigHook so individual .nix files don't duplicate them.
+# All JS packages in this repo are pnpm workspace members sharing a single
+# root pnpm-lock.yaml.  buildPnpmPackage provides the shared pnpmDeps,
+# pnpm and pnpmConfigHook so individual .nix files don't duplicate them.
+#
+# buildPnpmPackage returns packageJsonPath (e.g. "ui-tui/package.json"),
+# plus the shared pnpm store and node/pnpm toolchain.
 {
-  pkgs,
-  npm-lockfile-fix,
-  nodejs,
+  lib,
+  stdenv,
+  fetchPnpmDeps,
+  pnpmConfigHook,
+  nodejs-slim,
+  callPackage,
+  runCommand,
+  # pm/lock.json pins, used for node, npm and pnpm.
+  pmPackages,
   hermesSrc,
 }: let
-  # npm dependencies for the workspace, resolved from the lockfile.
-  npmDeps = pkgs.importNpmLock.importNpmLock {
-    npmRoot = hermesSrc;
-    package = let
-      upstream = builtins.fromJSON (builtins.readFile (hermesSrc + "/package.json"));
-    in
-      upstream
-      // {
-        # importNpmLock rewrites direct dependencies to file: URLs; follow that
-        # exact locked spec without dropping the upstream security override.
-        overrides = upstream.overrides // {"js-yaml@^4" = "$js-yaml";};
-      };
-  };
-in {
-  # Returns a buildNpmPackage-compatible attrs set that provides:
-  #   src, npmDeps, npmRoot      — workspace source + importNpmLock dep set
-  #   npmConfigHook              — importNpmLock's offline `npm install` hook
-  #   nativeBuildInputs          — [ updateLockfileScript ] (list, prepend with ++ for more)
-  #   passthru.packageJsonPath   — relative path to this workspace's package.json
-  #   nodejs                     — fixed nodejs version for all packages
-  mkNpmPassthru = {
-    folder, # repo-relative folder with package.json, e.g. "apps/desktop"
-    attr, # flake package attr, e.g. "desktop"
-    ...
-  }: {
-    inherit npmDeps nodejs;
-    src = hermesSrc;
-    npmConfigHook = pkgs.importNpmLock.npmConfigHook;
-    npmRoot = ".";
+  repoRoot = /. + builtins.unsafeDiscardStringContext hermesSrc;
 
-    ELECTRON_SKIP_BINARY_DOWNLOAD = 1;
-
-    nativeBuildInputs = [
-      (pkgs.writeShellScriptBin "update_${attr}_lockfile" ''
-        set -euox pipefail
-
-        REPO_ROOT=$(git rev-parse --show-toplevel)
-
-        # All workspace packages share the root lockfile.
-        cd "$REPO_ROOT"
-        rm -rf node_modules/
-        ${pkgs.lib.getExe' nodejs "npm"} cache clean --force
-        CI=true ${pkgs.lib.getExe' nodejs "npm"} install --workspaces
-        ${pkgs.lib.getExe npm-lockfile-fix} ./package-lock.json
-
-        nix build .#${attr}
-        echo "Lockfile updated and build verified for .#${attr}"
-      '')
-    ];
-
-    passthru = {
-      packageJsonPath = "${folder}/package.json";
+  # Every JS tool comes from pm/lock.json — the node the builds and the
+  # shipped app run on, npm wrapped onto it, and the pnpm that installs the
+  # workspaces. nixpkgs supplies nothing here; node/npm/pnpm have Linux
+  # artifacts in the lock.
+  pmNode = pmPackages.node;
+  npm12 = callPackage (hermesSrc + "/nix/npm-pinned.nix") {nodejs = pmNode;};
+  # nixpkgs' pnpm packages build from the `pnpm` npm package, which since
+  # pnpm 11 is only a launcher that downloads the native executable, and the
+  # pinned nixpkgs has no pnpm_12 anyway; pm's pnpm is that executable.
+  # fetchPnpmDeps runs its store normalizer (pnpm-fixup-state-db) on
+  # `pnpm.nodejs-slim`, which only nixpkgs' pnpm carries. That helper only
+  # rewrites the fetched store's index, so nixpkgs' node runs it.
+  pnpm =
+    pmPackages.pnpm
+    // {
+      inherit nodejs-slim;
     };
+  node_gyp_11_4_0 = callPackage (hermesSrc + "/nix/node-gyp-11-4-0.nix") {nodejs = nodejs;};
+  # bin/npm and bin/npx are the pinned npm; the rest of the tree (node,
+  # include/node headers, lib/node_modules/node's own bundled npm) is the
+  # pinned node. A plain symlinkJoin cannot express that: both paths carry
+  # bin/npm, so assemble it explicitly.
+  nodejs =
+    runCommand "nodejs-26-npm-12" {
+      # lib.getExe reads meta.mainProgram; the pm derivation carries no meta.
+      meta.mainProgram = "node";
+    } ''
+      cp -rs ${pmNode} $out
+      # cp -r copies the store's read-only directory modes; make the farm's own
+      # directories writable so bin/npm and bin/npx can be replaced. Only real
+      # directories are chmodded, never the symlink targets.
+      find $out -type d -exec chmod u+w {} +
+      rm -f $out/bin/npm $out/bin/npx
+      ln -s ${npm12}/bin/npm $out/bin/npm
+      ln -s ${npm12}/bin/npx $out/bin/npx
+    '';
+
+  # ── pnpm workspace discovery ───────────────────────────────────────
+  # Single source of truth: the `packages` list of pnpm-workspace.yaml.
+  # Everything below (workspace package.json discovery, the Python
+  # source's JS-dir exclusions) is derived from this so the topology is
+  # never duplicated.  Add a workspace to pnpm-workspace.yaml and the nix
+  # build picks it up automatically.  Nix reads no YAML: this parses the
+  # one shape the file uses (a top-level `packages:` key followed by
+  # `  - <dir>` / `  - <dir>/*` lines) and throws on anything else, so a
+  # reformatted list cannot silently drop a workspace.
+  workspaceYamlLines = lib.splitString "\n" (builtins.readFile (repoRoot + "/pnpm-workspace.yaml"));
+  workspacePatterns = let
+    start = lib.lists.findFirstIndex (line: line == "packages:") (builtins.length workspaceYamlLines) workspaceYamlLines;
+    block = lib.drop (start + 1) workspaceYamlLines;
+    count = lib.lists.findFirstIndex (line: !lib.hasPrefix "  - " line) (builtins.length block) block;
+    items = lib.take count block;
+    next = builtins.head (lib.drop count block ++ [""]);
+    patterns = map (lib.removePrefix "  - ") items;
+    supported = pattern: builtins.match "[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*(/\\*)?" pattern != null;
+  in
+    if items == [] || lib.hasPrefix " " next || lib.hasPrefix "-" next || !(lib.all supported patterns)
+    then throw "nix/lib.nix: pnpm-workspace.yaml `packages:` is no longer a block of unquoted `  - <dir>` or `  - <dir>/*` lines; update the parser"
+    else patterns;
+
+  # Expand a workspace glob (e.g. "apps/*") into concrete member dirs
+  # relative to the repo root.  Only trailing "*" globs are supported —
+  # that's all pnpm-workspace.yaml uses here.  Literal patterns (e.g.
+  # "ui-tui") pass through unchanged.
+  expandWorkspace = pattern: let
+    parts = lib.splitString "/" pattern;
+  in
+    if lib.last parts == "*"
+    then let
+      parent = lib.concatStringsSep "/" (lib.init parts);
+      entries = builtins.readDir (repoRoot + "/${parent}");
+      dirs = lib.filterAttrs (_: t: t == "directory") entries;
+    in
+      map (d: "${parent}/${d}") (builtins.attrNames dirs)
+    else [pattern];
+
+  # All workspace member directories (relative paths), filtered to those
+  # that actually carry a package.json — a glob like apps/* may match a
+  # dir that isn't really a package.
+  workspaceMemberDirs = builtins.filter (d: builtins.pathExists (repoRoot + "/${d}/package.json")) (
+    lib.concatMap expandWorkspace workspacePatterns
+  );
+
+  npmWorkspaceFiles = lib.fileset.unions (
+    [
+      (repoRoot + "/package.json")
+      (repoRoot + "/pnpm-lock.yaml")
+      (repoRoot + "/pnpm-workspace.yaml")
+    ]
+    ++ map (d: repoRoot + "/${d}/package.json") workspaceMemberDirs
+  );
+
+  # pnpm deps source: just what fetchPnpmDeps needs (root manifests +
+  # workspace member package.jsons).  Much smaller than the full repo,
+  # so changing source files won't invalidate the pnpmDeps derivation.
+  pnpmDepsSrc = lib.fileset.toSource {
+    root = repoRoot;
+    fileset = npmWorkspaceFiles;
   };
+
+  # The pnpm store for the whole lockfile, shared by all members; each
+  # build installs only its own slice of it.  nixpkgs has no hashless pnpm
+  # importer, so this is a fixed-output derivation pinned by upstream's
+  # nix/pnpm-deps-hash.  The hash tracks upstream's lock, so it needs no
+  # local regeneration here.
+  pnpmDeps = fetchPnpmDeps {
+    pname = "hermes-agent";
+    src = pnpmDepsSrc;
+    inherit pnpm;
+    # pnpm >= 11 keeps the store index in SQLite, which only fetcher
+    # version 4 dumps reproducibly.
+    fetcherVersion = 4;
+    # fetchPnpmDeps passes --registry="$NIX_NPM_REGISTRY", which is empty
+    # unless the Nix daemon sets it; pnpm 12 takes an empty registry
+    # literally and hangs retrying relative URLs.
+    # pnpm checks the root engines.node (engineStrict) against the node on
+    # PATH, where fetchPnpmDeps puts nixpkgs' node first: install with the
+    # pinned node every build uses.
+    prePnpmInstall = ''
+      export NIX_NPM_REGISTRY=''${NIX_NPM_REGISTRY:-https://registry.npmjs.org/}
+      export PATH=${pmNode}/bin:$PATH
+    '';
+    hash = lib.fileContents (hermesSrc + "/nix/pnpm-deps-hash");
+  };
+
+  # Build a per-package pnpm source: workspace resolution files + the
+  # package's own directory tree(s).  Source ROOT is always the repo
+  # root, preserving the workspace layout that pnpmConfigHook expects.
+  # Callers pass the dirs they need (relative to the repo root), so each
+  # package owns its own source scope.
+  testFileFilter = lib.fileset.fileFilter (file: lib.hasInfix ".test." file.name) repoRoot;
+  mkNpmSrc = dirs:
+    lib.fileset.toSource {
+      root = repoRoot;
+      fileset =
+        lib.fileset.difference (lib.fileset.union npmWorkspaceFiles (
+          lib.fileset.unions (map (d: repoRoot + "/${d}") dirs)
+        ))
+        testFileFilter;
+    };
+
+  # Returns a stdenv.mkDerivation with the workspace's pnpm deps installed.
+
+  # `dirs` is the single source of truth for what the package contains:
+  # its first entry is the package's own folder (→ packageJsonPath), and
+  # all entries scope the filtered src.  Packages that import source from
+  # another workspace member (workspace: deps) must list that member's dir
+  # too, e.g. apps/desktop depends on apps/shared.
+  #
+  # Usage:
+  #   hermesNpmLib.buildPnpmPackage {
+  #     dirs = [ "apps/desktop" "apps/shared" ];
+  #     buildPhase = '' ... '';
+  #     installPhase = '' ... '';
+  #   }
+  customBuildPnpmPackage = {dirs, ...} @ attrs: let
+    # The package's own folder is the first dir; it carries the
+    # package.json that names the derivation.
+    folder = builtins.head dirs;
+
+    # Read package.json from the repo (the filtered src is a store path, but we can read the original)
+    packageJson = builtins.fromJSON (builtins.readFile (repoRoot + "/${folder}/package.json"));
+    defaultPname = packageJson.name or "unknown";
+    defaultVersion = packageJson.version or "0.0.0";
+
+    common = {
+      inherit pnpmDeps;
+      # No sourceRoot — the workspace root (with the single pnpm-lock.yaml)
+      # is auto-detected as sourceRoot by nix, so pnpmConfigHook finds
+      # the lockfile there.
+      src = mkNpmSrc dirs;
+      # Only this member and the workspace members it depends on (pnpm
+      # always adds the root project's own dependencies). The braces make
+      # `...` select dependencies; pnpm reads a bare `./dir...` as that
+      # dir alone.
+      pnpmWorkspaces = ["{./${folder}}..."];
+      ELECTRON_SKIP_BINARY_DOWNLOAD = 1;
+      passthru = {
+        packageJsonPath = "${folder}/package.json";
+      };
+    };
+
+    # Remove `dirs` from the passed attrs (mkDerivation doesn't need it)
+    attrsWithoutDirs = removeAttrs attrs ["dirs"];
+
+    finalAttrs =
+      common
+      // attrsWithoutDirs
+      // {
+        pname = attrs.pname or defaultPname;
+        version = attrs.version or defaultVersion;
+        nativeBuildInputs =
+          [
+            nodejs
+            pnpm
+            pnpmConfigHook
+          ]
+          ++ attrs.nativeBuildInputs or [];
+      };
+  in
+    stdenv.mkDerivation finalAttrs;
+in {
+  inherit nodejs pnpm pnpmDeps;
+  node-gyp = node_gyp_11_4_0;
+
+  buildPnpmPackage = customBuildPnpmPackage;
 }

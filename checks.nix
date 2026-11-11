@@ -67,52 +67,6 @@ in {
       ${lib.escapeShellArg upstreamLock.locked.rev} > $out
   '';
 
-  desktop-build-stamp = let
-    phases = lib.splitString "# patch shebangs" hermesDesktop.renderer.buildPhase;
-    nativePhases = lib.splitString "node scripts/stage-native-deps.mjs" hermesDesktop.renderer.buildPhase;
-    nativeCopyPhases = lib.splitString "popd" (builtins.elemAt nativePhases 1);
-  in
-    assert lib.assertMsg (builtins.length phases == 2) "desktop stamp fixture requires exactly one phase boundary";
-    assert lib.assertMsg (builtins.length nativePhases == 2 && builtins.length nativeCopyPhases == 2) "desktop native-copy fixture requires exactly one phase boundary";
-      pkgs.runCommand "hermes-desktop-build-stamp" {
-        nativeBuildInputs = [pkgs.nodejs_26];
-      } ''
-        ${builtins.head phases}
-        export HOME=$(mktemp -d)
-        export HERMES_HOME="$HOME/hermes"
-        node ${self}/tests/desktop-build-stamp.mjs ${self.inputs.hermes-agent-src} \
-          apps/desktop/build/install-stamp.json ${lib.escapeShellArg expectedVersion} \
-          ${lib.escapeShellArg upstreamLock.locked.rev} \
-          ${pkgs.writeText "desktop-check-phase.sh" hermesDesktop.renderer.checkPhase} \
-          ${pkgs.writeText "desktop-native-copy-phase.sh" (builtins.head nativeCopyPhases)} > $out
-      '';
-
-  npm-workspace-overrides = let
-    npmLib = import ./lib.nix {
-      inherit pkgs;
-      nodejs = pkgs.nodejs_26;
-      hermesSrc = self.inputs.hermes-agent-src;
-      npm-lockfile-fix = self.inputs.npm-lockfile-fix.packages.${system}.default;
-    };
-    deps =
-      (npmLib.mkNpmPassthru {
-        folder = "apps/desktop";
-        attr = "desktop";
-      }).npmDeps;
-    generated = builtins.fromJSON (builtins.unsafeDiscardStringContext deps.package);
-    source = builtins.fromJSON (builtins.readFile (self.inputs.hermes-agent-src + "/package.json"));
-    lock = builtins.fromJSON (builtins.unsafeDiscardStringContext deps.packageLock);
-  in
-    assert lib.assertMsg (generated.overrides."js-yaml@^4" == "$js-yaml")
-    "npm direct js-yaml override must follow the rewritten locked dependency";
-    assert source.overrides."js-yaml@^4" == source.dependencies.js-yaml;
-    assert lock.packages."node_modules/js-yaml".version == source.dependencies.js-yaml;
-    assert generated.dependencies.js-yaml == lock.packages."node_modules/js-yaml".resolved;
-    assert builtins.removeAttrs generated.overrides ["js-yaml@^4"] == builtins.removeAttrs source.overrides ["js-yaml@^4"];
-      pkgs.runCommand "hermes-npm-workspace-overrides" {} ''
-        touch $out
-      '';
-
   updater-mutation-only = assert lib.assertMsg (rejectedReleases == [])
   "package provenance rejects accepted release tags: ${lib.concatStringsSep ", " rejectedReleases}";
   assert lib.assertMsg (acceptedInvalidTags == [])
@@ -232,6 +186,11 @@ in {
     grep -q "HERMES_DESKTOP_HERMES='${hermes}/bin/hermes'" \
       ${hermesDesktop}/bin/hermes-desktop
     grep -q "ELECTRON_IS_DEV='0'" ${hermesDesktop}/bin/hermes-desktop
+    # The desktop must ship the same immutable release identity as the CLI.
+    grep -Fq "\"commit\":\"${upstreamLock.locked.rev}\"" \
+      ${hermesDesktop}/share/hermes-desktop/install-stamp.json
+    grep -Fq "\"displayVersion\":\"${expectedVersion}\"" \
+      ${hermesDesktop}/share/hermes-desktop/install-stamp.json
     echo ok > $out
   '';
 
