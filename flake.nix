@@ -32,11 +32,6 @@
       flake = false;
     };
 
-    npm-lockfile-fix = {
-      url = "github:jeslie0/npm-lockfile-fix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     # Optional — only required when using nixosModules.hermes-agent-microvm.
     # Pull only when the consumer wires it; nothing forces it as a runtime dep.
     microvm = {

@@ -186,6 +186,11 @@ in {
     grep -q "HERMES_DESKTOP_HERMES='${hermes}/bin/hermes'" \
       ${hermesDesktop}/bin/hermes-desktop
     grep -q "ELECTRON_IS_DEV='0'" ${hermesDesktop}/bin/hermes-desktop
+    # The desktop must ship the same immutable release identity as the CLI.
+    grep -Fq "\"commit\":\"${upstreamLock.locked.rev}\"" \
+      ${hermesDesktop}/share/hermes-desktop/install-stamp.json
+    grep -Fq "\"displayVersion\":\"${expectedVersion}\"" \
+      ${hermesDesktop}/share/hermes-desktop/install-stamp.json
     echo ok > $out
   '';
 

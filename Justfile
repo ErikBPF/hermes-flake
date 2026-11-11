@@ -8,7 +8,7 @@ default:
 build:
     nix build .#hermes-agent --print-build-logs
 
-# Build the full variant (every extra — may fail until overrides catch up)
+# Build the full variant (upstream's curated [all] extras)
 build-full:
     nix build .#hermes-agent-full --print-build-logs
 

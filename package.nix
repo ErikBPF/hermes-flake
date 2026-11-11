@@ -78,10 +78,17 @@
   # extra: 0.23.1 moved opt-in backends (voice, wake, messaging, provider and
   # search packs) out of `[all]` so one broken wheel cannot fail every install.
   # Request those explicitly with `.withExtras`.
-  fullExtras =
-    lib.intersectLists
-    ["acp" "cron" "google" "mcp" "pty" "sms" "uvloop" "web" "youtube"]
-    availableExtras;
+  # `cron` and `pty` are declared but empty (their deps moved to core), so
+  # uv2nix omits them from `optionals`; they are no-ops either way.
+  fullExtraNames = ["acp" "google" "mcp" "sms" "uvloop" "web" "youtube"];
+
+  # Fail at eval when upstream renames or drops a curated extra, instead of
+  # silently shipping a thinner hermes-agent-full.
+  unknownFullExtras = lib.subtractLists availableExtras fullExtraNames;
+
+  fullExtras = assert lib.assertMsg (unknownFullExtras == [])
+  "hermes-agent-full: curated extras missing upstream: ${lib.concatStringsSep ", " unknownFullExtras}";
+    lib.intersectLists fullExtraNames availableExtras;
 
   mkHermesPkg = {
     name,

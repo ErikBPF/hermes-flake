@@ -38,7 +38,7 @@ extra trust layer at the cost of slower upgrades.
 | Output | What |
 |---|---|
 | `packages.<sys>.hermes-agent` | Base — pick extras via `.withExtras [ ... ]` |
-| `packages.<sys>.hermes-agent-full` | Every declared extra |
+| `packages.<sys>.hermes-agent-full` | Upstream's curated `[all]` extra set |
 | `nixosModules.default` | System service, bare-metal |
 | `nixosModules.hermes-agent-container` | systemd-nspawn isolation |
 | `nixosModules.hermes-agent-podman` | OCI container, **nix-built** image (podman or docker) |

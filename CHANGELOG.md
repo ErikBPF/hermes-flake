@@ -21,6 +21,7 @@ Conventional Commits in the git log; this file groups by release.
 - Docs: `ENV_VARS.md`, `WEBHOOK_ROUTES.md`, `ISOLATION.md`, `CLIENT.md`, `MIGRATION.md`, `STATE.md`, `SOPS.md`, `RELEASING.md`, `CONTRIBUTING.md`.
 
 ### Changed
+- `hermes-agent-full` now installs upstream's curated `[all]` extra set instead of every declared extra. Opt-in backends (`voice`, `wake`, `messaging`, provider and search packs) stay available through `.withExtras`.
 - `openBindAddress` default: `0.0.0.0` → `127.0.0.1` (matches upstream; public binding is now opt-in).
 - `memoryMax` / `cpuQuota` defaults: `"2G"` / `"200%"` → `null` (uncapped; explicit caps for hosts that want them).
 - Smoke check no longer hardcodes the hermes-agent version — reads it from upstream's `pyproject.toml` at eval time so the auto-bump cron doesn't need to touch tests.
