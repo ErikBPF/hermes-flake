@@ -74,9 +74,13 @@
   # from the eager "full" install so CI and default consumers don't break.
   # Users on Python 3.11 or Darwin can still request it explicitly via
   # `hermes-agent.withExtras [ "wake" ]`.
+  # Mirror upstream's `[all]` extra set instead of installing every declared
+  # extra: 0.23.1 moved opt-in backends (voice, wake, messaging, provider and
+  # search packs) out of `[all]` so one broken wheel cannot fail every install.
+  # Request those explicitly with `.withExtras`.
   fullExtras =
-    lib.subtractLists
-    (lib.optional (pkgs.stdenv.isLinux && lib.versionAtLeast python.version "3.12") "wake")
+    lib.intersectLists
+    ["acp" "cron" "google" "mcp" "pty" "sms" "uvloop" "web" "youtube"]
     availableExtras;
 
   mkHermesPkg = {
@@ -147,18 +151,20 @@
   # Desktop (Electron) app — wraps the hermes-agent CLI with a native GUI.
   # Requires nodejs + electron at build time.
   hermesDesktop = let
-    npm-lockfile-fix-pkg = inputs.npm-lockfile-fix.packages.${system}.default;
-    hermesNpmLib = import ./lib.nix {
-      inherit pkgs;
-      npm-lockfile-fix = npm-lockfile-fix-pkg;
-      nodejs = pkgs.nodejs_26;
-      inherit hermesSrc;
+    pmPackages = lib.filterAttrs (_: lib.isDerivation) (
+      pkgs.callPackage (hermesSrc + "/nix/pm-packages.nix") {}
+    );
+    hermesNpmLib = pkgs.callPackage ./lib.nix {inherit pmPackages hermesSrc;};
+    generatedIcons = pkgs.callPackage (hermesSrc + "/nix/icons.nix") {
+      inherit (packages.hermes-agent) venv;
     };
   in
     pkgs.callPackage ./desktop.nix {
       inherit (pkgs) electron;
-      inherit hermesNpmLib;
+      inherit hermesNpmLib generatedIcons hermesSrc;
+      installStampFile = installStamp;
       hermesAgent = packages.hermes-agent;
+      python3 = python;
     };
 in
   packages // {inherit hermesDesktop;}

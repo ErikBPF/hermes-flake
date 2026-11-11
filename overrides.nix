@@ -45,6 +45,13 @@ in
       HERMES_NIX_BUILD = "1";
     });
 
+    # Legacy sdist build files (0.23.1 what/telegram extras).
+    docopt = addSetuptools prev.docopt;
+    pilk = addSetuptools prev.pilk;
+    misaki = prev.misaki.overrideAttrs (old: {
+      nativeBuildInputs = (old.nativeBuildInputs or []) ++ [final.hatchling];
+    });
+
     # Voice extras — portaudio
     sounddevice = prev.sounddevice.overrideAttrs (old: {
       buildInputs = (old.buildInputs or []) ++ [pkgs.portaudio];
